@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Calendar,
   FileText,
@@ -18,8 +18,10 @@ import {
   AuctionRecord,
   ComputedAuctionMetrics,
   Language,
+  ReportingPeriod,
   ReportMetadata,
 } from '../types/auction';
+import { getMonthName } from '../services/storageService';
 import {
   GoldenGavelIcon,
   NavyCarIcon,
@@ -28,19 +30,30 @@ import {
   PieChartKpiIcon,
   ExcelSheetIcon,
 } from './CustomIcons';
+import { ReportingPeriodBar } from './ReportingPeriodBar';
 
 interface AuctionDataReportProps {
   auctions: AuctionRecord[];
   metrics: ComputedAuctionMetrics;
   metadata: ReportMetadata;
+  selectedPeriod: ReportingPeriod;
+  yearsWithData: number[];
+  countsByPeriodKey: Record<string, number>;
   lang: Language;
   pixelPerfectMode: boolean;
+  onSelectPeriod: (year: number, month: number) => void;
+  onPrevMonth: () => void;
+  onNextMonth: () => void;
+  onReturnToCurrentMonth: () => void;
   onUpdateMetadata: (meta: ReportMetadata) => void;
   onOpenAddModal: () => void;
   onOpenEditModal: (record: AuctionRecord) => void;
   onDeleteAuction: (record: AuctionRecord) => void;
   onInlineSaveAuction: (record: AuctionRecord) => { ok: boolean; error?: string };
+  onInlineDirtyChange?: (isDirty: boolean) => void;
   onSwitchToSheet2?: () => void;
+  migrationState?: 'pending_approval' | 'completed';
+  onOpenMigrationModal?: () => void;
 }
 
 type SortField =
@@ -55,17 +68,30 @@ export const AuctionDataReport: React.FC<AuctionDataReportProps> = ({
   auctions,
   metrics,
   metadata,
+  selectedPeriod,
+  yearsWithData,
+  countsByPeriodKey,
   lang,
   pixelPerfectMode,
+  onSelectPeriod,
+  onPrevMonth,
+  onNextMonth,
+  onReturnToCurrentMonth,
   onUpdateMetadata,
   onOpenAddModal,
   onOpenEditModal,
   onDeleteAuction,
   onInlineSaveAuction,
+  onInlineDirtyChange,
   onSwitchToSheet2,
+  migrationState,
+  onOpenMigrationModal,
 }) => {
   const isAr = lang === 'ar';
   const assetBase = import.meta.env.BASE_URL || './';
+  const monthNameAr = getMonthName(selectedPeriod.month, 'ar');
+  const monthNameEn = getMonthName(selectedPeriod.month, 'en');
+  const currentMonthLabel = isAr ? monthNameAr : monthNameEn;
 
   const [searchQuery, setSearchQuery] = useState('');
   const [sortField, setSortField] = useState<SortField>('index');
@@ -76,6 +102,14 @@ export const AuctionDataReport: React.FC<AuctionDataReportProps> = ({
   const [inlineEditId, setInlineEditId] = useState<string | null>(null);
   const [inlineDraft, setInlineDraft] = useState<AuctionRecord | null>(null);
   const [inlineError, setInlineError] = useState<string | null>(null);
+
+  // Reset inline edit state when selectedPeriod changes
+  useEffect(() => {
+    setInlineEditId(null);
+    setInlineDraft(null);
+    setInlineError(null);
+    onInlineDirtyChange?.(false);
+  }, [selectedPeriod.year, selectedPeriod.month]);
 
   const handleSort = (field: SortField) => {
     if (sortField === field) {
@@ -122,12 +156,14 @@ export const AuctionDataReport: React.FC<AuctionDataReportProps> = ({
     setInlineEditId(rec.id);
     setInlineDraft({ ...rec });
     setInlineError(null);
+    onInlineDirtyChange?.(true);
   };
 
   const cancelInlineEdit = () => {
     setInlineEditId(null);
     setInlineDraft(null);
     setInlineError(null);
+    onInlineDirtyChange?.(false);
   };
 
   const saveInlineEdit = () => {
@@ -140,6 +176,7 @@ export const AuctionDataReport: React.FC<AuctionDataReportProps> = ({
     setInlineEditId(null);
     setInlineDraft(null);
     setInlineError(null);
+    onInlineDirtyChange?.(false);
   };
 
   return (
@@ -148,7 +185,7 @@ export const AuctionDataReport: React.FC<AuctionDataReportProps> = ({
       dir={isAr ? 'rtl' : 'ltr'}
       className="print-sheet w-full bg-[#F4F7FB] rounded-[18px] border border-[#BCC8D6] shadow-[0_4px_20px_rgba(18,59,112,0.08)] overflow-hidden p-2.5 sm:p-3.5 transition-all"
     >
-      {/* 1. HEADER BANNER & METADATA BAR (Exact Reference Geometry) */}
+      {/* 1. HEADER BANNER & METADATA BAR (Exact Reference Geometry Preserved) */}
       <div
         dir="ltr"
         className="relative w-full rounded-t-[14px] overflow-hidden bg-white border border-[#CBD5E1] shadow-xs"
@@ -180,8 +217,10 @@ export const AuctionDataReport: React.FC<AuctionDataReportProps> = ({
                 <h1 className="text-[22px] sm:text-[28px] font-black text-white leading-tight tracking-tight drop-shadow-xs">
                   {isAr ? 'تقرير بيانات المزادات' : 'Vehicle Auction Data Report'}
                 </h1>
-                <p className="text-[14px] sm:text-[18px] font-bold text-white/95 font-en tracking-wide leading-tight mt-0.5">
-                  {isAr ? 'Vehicle Auction Data Report' : 'تقرير بيانات المزادات'}
+                <p className="text-[13px] sm:text-[16px] font-bold text-white/95 font-en tracking-wide leading-tight mt-0.5">
+                  {isAr
+                    ? `Vehicle Auction Data Report — ${monthNameAr} ${selectedPeriod.year}`
+                    : `تقرير مزادات شهر ${monthNameAr} ${selectedPeriod.year}`}
                 </p>
 
                 {/* Curved Diagonal Left/Right SVG Accents */}
@@ -294,6 +333,20 @@ export const AuctionDataReport: React.FC<AuctionDataReportProps> = ({
         </div>
       </div>
 
+      {/* 1.B REPORTING PERIOD SELECTOR BAR (Below Main Header, Above KPI Cards) */}
+      <ReportingPeriodBar
+        selectedPeriod={selectedPeriod}
+        yearsWithData={yearsWithData}
+        countsByPeriodKey={countsByPeriodKey}
+        lang={lang}
+        migrationState={migrationState}
+        onSelectPeriod={onSelectPeriod}
+        onPrevMonth={onPrevMonth}
+        onNextMonth={onNextMonth}
+        onReturnToCurrentMonth={onReturnToCurrentMonth}
+        onOpenMigrationModal={onOpenMigrationModal}
+      />
+
       {/* 2. SIX KPI CARDS ROW */}
       <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-2.5 my-2.5">
         {/* Card 1: Total Auctions */}
@@ -387,8 +440,8 @@ export const AuctionDataReport: React.FC<AuctionDataReportProps> = ({
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder={
                   isAr
-                    ? 'بحث برقم المزاد، المدة، الملاحظات، التحديات، التوصيات...'
-                    : 'Search auction number, duration, notes, challenges...'
+                    ? `بحث في مزادات شهر ${currentMonthLabel} ${selectedPeriod.year}...`
+                    : `Search auctions in ${currentMonthLabel} ${selectedPeriod.year}...`
                 }
                 className="w-full ps-9 pe-3 py-1 text-xs font-semibold bg-[#F8FAFC] border border-[#CBD5E1] rounded-lg focus:outline-none focus:border-[#165B9D]"
               />
@@ -407,7 +460,11 @@ export const AuctionDataReport: React.FC<AuctionDataReportProps> = ({
               className="flex items-center gap-1.5 px-3 py-1 text-xs font-bold text-white bg-[#16843A] hover:bg-[#126E30] rounded-lg shadow-2xs transition-colors cursor-pointer whitespace-nowrap"
             >
               <Plus className="w-3.5 h-3.5" />
-              <span>{isAr ? 'إضافة مزاد جديد' : 'Add New Auction'}</span>
+              <span>
+                {isAr
+                  ? `إضافة مزاد جديد (${currentMonthLabel} ${selectedPeriod.year})`
+                  : `Add Auction (${currentMonthLabel} ${selectedPeriod.year})`}
+              </span>
             </button>
           </div>
         </div>
@@ -477,7 +534,12 @@ export const AuctionDataReport: React.FC<AuctionDataReportProps> = ({
                     <div>{isAr ? 'المدرجة' : 'Vehicles'}</div>
                   </div>
                   <svg viewBox="0 0 24 24" className="w-5 h-5 fill-white shrink-0">
-                    <path d="M5 11L6.5 6.5C7 5.5 8 5 9 5H15C16 5 17 5.5 17.5 6.5L19 11M5 11H19M5 11V17H7V19H9V17H15V19H17V17H19V11" stroke="currentColor" strokeWidth="1.8" fill="none" />
+                    <path
+                      d="M5 11L6.5 6.5C7 5.5 8 5 9 5H15C16 5 17 5.5 17.5 6.5L19 11M5 11H19M5 11V17H7V19H9V17H15V19H17V17H19V11"
+                      stroke="currentColor"
+                      strokeWidth="1.8"
+                      fill="none"
+                    />
                   </svg>
                 </div>
               </th>
@@ -492,10 +554,30 @@ export const AuctionDataReport: React.FC<AuctionDataReportProps> = ({
                     <div>{isAr ? 'عدد المركبات' : 'Sold'}</div>
                     <div>{isAr ? 'المبيعة' : 'Vehicles'}</div>
                   </div>
-                  <svg viewBox="0 0 24 24" className="w-5 h-5 text-white shrink-0" fill="none">
-                    <path d="M4 12L5.5 7.5C6 6.5 7 6 8 6H14C15 6 16 6.5 16.5 7.5L18 12V17H4V12Z" stroke="currentColor" strokeWidth="1.7" />
-                    <circle cx="18" cy="17" r="4.5" fill="#16843A" stroke="white" strokeWidth="1.2" />
-                    <path d="M16.2 17L17.5 18.3L20 15.8" stroke="white" strokeWidth="1.5" strokeLinecap="round" />
+                  <svg
+                    viewBox="0 0 24 24"
+                    className="w-5 h-5 text-white shrink-0"
+                    fill="none"
+                  >
+                    <path
+                      d="M4 12L5.5 7.5C6 6.5 7 6 8 6H14C15 6 16 6.5 16.5 7.5L18 12V17H4V12Z"
+                      stroke="currentColor"
+                      strokeWidth="1.7"
+                    />
+                    <circle
+                      cx="18"
+                      cy="17"
+                      r="4.5"
+                      fill="#16843A"
+                      stroke="white"
+                      strokeWidth="1.2"
+                    />
+                    <path
+                      d="M16.2 17L17.5 18.3L20 15.8"
+                      stroke="white"
+                      strokeWidth="1.5"
+                      strokeLinecap="round"
+                    />
                   </svg>
                 </div>
               </th>
@@ -510,10 +592,30 @@ export const AuctionDataReport: React.FC<AuctionDataReportProps> = ({
                     <div>{isAr ? 'عدد المركبات' : 'Unsold'}</div>
                     <div>{isAr ? 'غير المبيعة' : 'Vehicles'}</div>
                   </div>
-                  <svg viewBox="0 0 24 24" className="w-5 h-5 text-white shrink-0" fill="none">
-                    <path d="M4 12L5.5 7.5C6 6.5 7 6 8 6H14C15 6 16 6.5 16.5 7.5L18 12V17H4V12Z" stroke="currentColor" strokeWidth="1.7" />
-                    <circle cx="18" cy="17" r="4.5" fill="#D9383A" stroke="white" strokeWidth="1.2" />
-                    <path d="M16.5 15.5L19.5 18.5M19.5 15.5L16.5 18.5" stroke="white" strokeWidth="1.5" strokeLinecap="round" />
+                  <svg
+                    viewBox="0 0 24 24"
+                    className="w-5 h-5 text-white shrink-0"
+                    fill="none"
+                  >
+                    <path
+                      d="M4 12L5.5 7.5C6 6.5 7 6 8 6H14C15 6 16 6.5 16.5 7.5L18 12V17H4V12Z"
+                      stroke="currentColor"
+                      strokeWidth="1.7"
+                    />
+                    <circle
+                      cx="18"
+                      cy="17"
+                      r="4.5"
+                      fill="#D9383A"
+                      stroke="white"
+                      strokeWidth="1.2"
+                    />
+                    <path
+                      d="M16.5 15.5L19.5 18.5M19.5 15.5L16.5 18.5"
+                      stroke="white"
+                      strokeWidth="1.5"
+                      strokeLinecap="round"
+                    />
                   </svg>
                 </div>
               </th>
@@ -552,7 +654,34 @@ export const AuctionDataReport: React.FC<AuctionDataReportProps> = ({
           </thead>
 
           <tbody className="text-[13.5px] sm:text-[14.5px] font-bold text-[#0F172A]">
-            {filteredAuctions.length === 0 ? (
+            {auctions.length === 0 ? (
+              <tr>
+                <td
+                  colSpan={pixelPerfectMode ? 9 : 10}
+                  className="py-8 px-4 text-center bg-[#F8FAFC]"
+                >
+                  <div className="flex flex-col items-center justify-center gap-3">
+                    <p className="text-base font-black text-[#123B70]">
+                      {isAr
+                        ? `لا توجد مزادات مسجلة لشهر ${monthNameAr} ${selectedPeriod.year}.`
+                        : `No auctions recorded for ${monthNameEn} ${selectedPeriod.year}.`}
+                    </p>
+                    <button
+                      type="button"
+                      onClick={onOpenAddModal}
+                      className="no-print inline-flex items-center gap-2 px-4 py-2 text-xs sm:text-sm font-extrabold text-white bg-[#16843A] hover:bg-[#126E30] rounded-xl shadow-xs transition-colors cursor-pointer"
+                    >
+                      <Plus className="w-4 h-4" />
+                      <span>
+                        {isAr
+                          ? 'إضافة أول مزاد لهذا الشهر'
+                          : 'Add First Auction for This Month'}
+                      </span>
+                    </button>
+                  </div>
+                </td>
+              </tr>
+            ) : filteredAuctions.length === 0 ? (
               <tr>
                 <td
                   colSpan={pixelPerfectMode ? 9 : 10}

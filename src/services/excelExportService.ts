@@ -4,9 +4,13 @@ import {
   ComputedAuctionMetrics,
   Language,
   PerformanceThresholds,
+  ReportingPeriod,
   ReportMetadata,
 } from '../types/auction';
-import { evaluateAuctionPerformance } from './storageService';
+import {
+  evaluateAuctionPerformance,
+  getMonthName,
+} from './storageService';
 
 async function fetchImageAsBase64(url: string): Promise<string | null> {
   try {
@@ -31,19 +35,24 @@ export async function exportExecutiveExcelReport(params: {
   auctions: AuctionRecord[];
   metrics: ComputedAuctionMetrics;
   metadata: ReportMetadata;
+  selectedPeriod: ReportingPeriod;
   thresholds: PerformanceThresholds;
   lang: Language;
-}): Promise<void> {
-  const { auctions, metrics, metadata, thresholds, lang } = params;
+}): Promise<string> {
+  const { auctions, metrics, metadata, selectedPeriod, thresholds, lang } =
+    params;
   const isAr = lang === 'ar';
   const assetBase = import.meta.env.BASE_URL || './';
+  const monthNameAr = getMonthName(selectedPeriod.month, 'ar');
+  const monthNameEn = getMonthName(selectedPeriod.month, 'en');
+  const paddedMonth = String(selectedPeriod.month).padStart(2, '0');
+  const fileName = `SAAED_Auction_Report_${selectedPeriod.year}_${paddedMonth}.xlsx`;
 
   const workbook = new ExcelJS.Workbook();
   workbook.creator = 'SAAED Vehicle Auction Executive Reporting System';
   workbook.created = new Date();
   workbook.modified = new Date();
 
-  // Load images to embed into the workbook
   const [logoBase64, topPhotoBase64, bottomPhotoBase64, carsPhotoBase64] =
     await Promise.all([
       fetchImageAsBase64(`${assetBase}assets/saaed_logo.png`),
@@ -71,7 +80,7 @@ export async function exportExecutiveExcelReport(params: {
   const sheet1 = workbook.addWorksheet('تقرير بيانات المزادات', {
     views: [{ rightToLeft: true, showGridLines: true, zoomScale: 95 }],
     pageSetup: {
-      paperSize: 9, // A4
+      paperSize: 9,
       orientation: 'landscape',
       fitToPage: true,
       fitToWidth: 1,
@@ -99,12 +108,10 @@ export async function exportExecutiveExcelReport(params: {
     { key: 'recommendations', width: 34 },
   ];
 
-  // Header Banner Rows (Rows 1 to 3)
   sheet1.getRow(1).height = 28;
   sheet1.getRow(2).height = 26;
   sheet1.getRow(3).height = 24;
 
-  // Logo space (Cols A-B, Rows 1-2)
   sheet1.mergeCells('A1:B2');
   const s1LogoCell = sheet1.getCell('A1');
   s1LogoCell.fill = {
@@ -113,13 +120,12 @@ export async function exportExecutiveExcelReport(params: {
     fgColor: { argb: 'FFFFFFFF' },
   };
 
-  // Title Banner (Cols C-F, Rows 1-2)
   sheet1.mergeCells('C1:F1');
   const s1TitleAr = sheet1.getCell('C1');
-  s1TitleAr.value = 'تقرير بيانات المزادات';
+  s1TitleAr.value = `تقرير بيانات المزادات — شهر ${monthNameAr} ${selectedPeriod.year}`;
   s1TitleAr.font = {
     name: 'Cairo',
-    size: 18,
+    size: 16,
     bold: true,
     color: { argb: 'FFFFFFFF' },
   };
@@ -132,10 +138,10 @@ export async function exportExecutiveExcelReport(params: {
 
   sheet1.mergeCells('C2:F2');
   const s1TitleEn = sheet1.getCell('C2');
-  s1TitleEn.value = 'Vehicle Auction Data Report';
+  s1TitleEn.value = `Vehicle Auction Data Report — ${monthNameEn} ${selectedPeriod.year}`;
   s1TitleEn.font = {
     name: 'Calibri',
-    size: 13,
+    size: 12,
     bold: true,
     color: { argb: 'FFE2E8F0' },
   };
@@ -146,7 +152,6 @@ export async function exportExecutiveExcelReport(params: {
     fgColor: { argb: 'FF165B9D' },
   };
 
-  // Panoramic photo area (Cols G-I, Rows 1-3)
   sheet1.mergeCells('G1:I3');
   const s1PhotoCell = sheet1.getCell('G1');
   s1PhotoCell.fill = {
@@ -168,7 +173,6 @@ export async function exportExecutiveExcelReport(params: {
     });
   }
 
-  // Row 3: Report Date & Period Metadata
   sheet1.mergeCells('A3:C3');
   const s1DateCell = sheet1.getCell('A3');
   s1DateCell.value = `تاريخ إعداد التقرير : ${metadata.reportDate}`;
@@ -187,10 +191,10 @@ export async function exportExecutiveExcelReport(params: {
 
   sheet1.mergeCells('D3:F3');
   const s1PeriodCell = sheet1.getCell('D3');
-  s1PeriodCell.value = `الفترة المشمولة بالتقرير : من ${metadata.periodStart} إلى ${metadata.periodEnd}`;
+  s1PeriodCell.value = `الفترة الزمنية للتقرير : شهر ${monthNameAr} ${selectedPeriod.year} (من ${metadata.periodStart} إلى ${metadata.periodEnd})`;
   s1PeriodCell.font = {
     name: 'Cairo',
-    size: 11,
+    size: 10.5,
     bold: true,
     color: { argb: 'FF123B70' },
   };
@@ -203,9 +207,9 @@ export async function exportExecutiveExcelReport(params: {
 
   sheet1.getRow(4).height = 10;
 
-  // Rows 5-6: 6 KPI Cards using Excel Cells & Live Formulas
   const dataStartRow = 9;
-  const dataEndRow = dataStartRow + auctions.length - 1;
+  const effectiveRowCount = Math.max(1, auctions.length);
+  const dataEndRow = dataStartRow + effectiveRowCount - 1;
   const totalRowIdx = dataEndRow + 1;
 
   sheet1.getRow(5).height = 22;
@@ -218,7 +222,10 @@ export async function exportExecutiveExcelReport(params: {
       cellTitle: 'A5',
       cellVal: 'A6',
       title: isAr ? 'إجمالي عدد المزادات' : 'Total Auctions',
-      formula: `COUNTA(B${dataStartRow}:B${dataEndRow})`,
+      formula:
+        auctions.length > 0
+          ? `COUNTA(B${dataStartRow}:B${dataEndRow})`
+          : '0',
       result: metrics.totalAuctions,
       numFmt: '#,##0',
       color: 'FF922C35',
@@ -329,7 +336,6 @@ export async function exportExecutiveExcelReport(params: {
 
   sheet1.getRow(7).height = 10;
 
-  // Row 8: Table Header Row
   const headerRow = sheet1.getRow(8);
   headerRow.height = 30;
   const headersS1 = isAr
@@ -383,55 +389,74 @@ export async function exportExecutiveExcelReport(params: {
     };
   });
 
-  // Data Rows (Rows 9..9+N-1)
-  auctions.forEach((auc, idx) => {
-    const rIdx = dataStartRow + idx;
-    const row = sheet1.getRow(rIdx);
-    row.height = 24;
-    const bgArgb = idx % 2 === 0 ? 'FFFFFFFF' : 'FFE9EFF7';
-
-    row.getCell(1).value = idx + 1;
-    row.getCell(2).value = auc.auctionNumber;
-    row.getCell(3).value = isAr ? auc.durationAr : auc.durationEn;
-    row.getCell(4).value = auc.listedVehicles;
-    row.getCell(5).value = auc.soldVehicles;
-    row.getCell(6).value = {
-      formula: `D${rIdx}-E${rIdx}`,
-      result: auc.unsoldVehicles,
-    };
-    row.getCell(7).value = isAr ? auc.notesAr : auc.notesEn;
-    row.getCell(8).value = isAr ? auc.challengesAr : auc.challengesEn;
-    row.getCell(9).value = isAr ? auc.recommendationsAr : auc.recommendationsEn;
-
+  if (auctions.length === 0) {
+    const emptyRow = sheet1.getRow(dataStartRow);
+    emptyRow.height = 28;
+    sheet1.mergeCells(`A${dataStartRow}:C${dataStartRow}`);
+    emptyRow.getCell(1).value = isAr
+      ? `لا توجد مزادات مسجلة لشهر ${monthNameAr} ${selectedPeriod.year}`
+      : `No auctions recorded for ${monthNameEn} ${selectedPeriod.year}`;
+    emptyRow.getCell(4).value = 0;
+    emptyRow.getCell(5).value = 0;
+    emptyRow.getCell(6).value = 0;
+    emptyRow.getCell(7).value = '—';
+    emptyRow.getCell(8).value = '—';
+    emptyRow.getCell(9).value = '—';
     for (let c = 1; c <= 9; c++) {
-      const cell = row.getCell(c);
-      cell.font = {
-        name: 'Cairo',
-        size: 11,
-        bold: c <= 6,
-        color: { argb: 'FF0F172A' },
-      };
-      cell.fill = {
-        type: 'pattern',
-        pattern: 'solid',
-        fgColor: { argb: bgArgb },
-      };
-      cell.alignment = {
-        horizontal: 'center',
-        vertical: 'middle',
-        wrapText: true,
-      };
-      if (c >= 4 && c <= 6) {
-        cell.numFmt = '#,##0';
-      }
-      cell.border = {
-        top: { style: 'thin', color: { argb: 'FFBCC8D6' } },
-        bottom: { style: 'thin', color: { argb: 'FFBCC8D6' } },
-        left: { style: 'thin', color: { argb: 'FFBCC8D6' } },
-        right: { style: 'thin', color: { argb: 'FFBCC8D6' } },
-      };
+      const cell = emptyRow.getCell(c);
+      cell.font = { name: 'Cairo', size: 11, bold: true, color: { argb: 'FF64748B' } };
+      cell.alignment = { horizontal: 'center', vertical: 'middle' };
     }
-  });
+  } else {
+    auctions.forEach((auc, idx) => {
+      const rIdx = dataStartRow + idx;
+      const row = sheet1.getRow(rIdx);
+      row.height = 24;
+      const bgArgb = idx % 2 === 0 ? 'FFFFFFFF' : 'FFE9EFF7';
+
+      row.getCell(1).value = idx + 1;
+      row.getCell(2).value = auc.auctionNumber;
+      row.getCell(3).value = isAr ? auc.durationAr : auc.durationEn;
+      row.getCell(4).value = auc.listedVehicles;
+      row.getCell(5).value = auc.soldVehicles;
+      row.getCell(6).value = {
+        formula: `D${rIdx}-E${rIdx}`,
+        result: auc.unsoldVehicles,
+      };
+      row.getCell(7).value = isAr ? auc.notesAr : auc.notesEn;
+      row.getCell(8).value = isAr ? auc.challengesAr : auc.challengesEn;
+      row.getCell(9).value = isAr ? auc.recommendationsAr : auc.recommendationsEn;
+
+      for (let c = 1; c <= 9; c++) {
+        const cell = row.getCell(c);
+        cell.font = {
+          name: 'Cairo',
+          size: 11,
+          bold: c <= 6,
+          color: { argb: 'FF0F172A' },
+        };
+        cell.fill = {
+          type: 'pattern',
+          pattern: 'solid',
+          fgColor: { argb: bgArgb },
+        };
+        cell.alignment = {
+          horizontal: 'center',
+          vertical: 'middle',
+          wrapText: true,
+        };
+        if (c >= 4 && c <= 6) {
+          cell.numFmt = '#,##0';
+        }
+        cell.border = {
+          top: { style: 'thin', color: { argb: 'FFBCC8D6' } },
+          bottom: { style: 'thin', color: { argb: 'FFBCC8D6' } },
+          left: { style: 'thin', color: { argb: 'FFBCC8D6' } },
+          right: { style: 'thin', color: { argb: 'FFBCC8D6' } },
+        };
+      }
+    });
+  }
 
   // Totals Row (Gold + Navy)
   const totalRow = sheet1.getRow(totalRowIdx);
@@ -486,7 +511,7 @@ export async function exportExecutiveExcelReport(params: {
   const sheet2 = workbook.addWorksheet('التحليل التنفيذي', {
     views: [{ rightToLeft: true, showGridLines: true, zoomScale: 90 }],
     pageSetup: {
-      paperSize: 9, // A4 Landscape
+      paperSize: 9,
       orientation: 'landscape',
       fitToPage: true,
       fitToWidth: 1,
@@ -518,7 +543,6 @@ export async function exportExecutiveExcelReport(params: {
   sheet2.getRow(1).height = 30;
   sheet2.getRow(2).height = 28;
 
-  // Logo space (Cols A-B, Rows 1-2)
   sheet2.mergeCells('A1:B2');
   sheet2.getCell('A1').fill = {
     type: 'pattern',
@@ -526,13 +550,12 @@ export async function exportExecutiveExcelReport(params: {
     fgColor: { argb: 'FFFFFFFF' },
   };
 
-  // Title Banner (Cols C-G, Rows 1-2)
   sheet2.mergeCells('C1:G1');
   const s2TitleAr = sheet2.getCell('C1');
-  s2TitleAr.value = 'لوحة التحليل التنفيذي لأداء المزادات';
+  s2TitleAr.value = `لوحة التحليل التنفيذي لأداء المزادات — شهر ${monthNameAr} ${selectedPeriod.year}`;
   s2TitleAr.font = {
     name: 'Cairo',
-    size: 18,
+    size: 16,
     bold: true,
     color: { argb: 'FFFFFFFF' },
   };
@@ -545,10 +568,10 @@ export async function exportExecutiveExcelReport(params: {
 
   sheet2.mergeCells('C2:G2');
   const s2TitleEn = sheet2.getCell('C2');
-  s2TitleEn.value = 'Executive Auction Performance Dashboard';
+  s2TitleEn.value = `Executive Auction Performance Dashboard — ${monthNameEn} ${selectedPeriod.year}`;
   s2TitleEn.font = {
     name: 'Calibri',
-    size: 13,
+    size: 12,
     bold: true,
     color: { argb: 'FFE2E8F0' },
   };
@@ -559,7 +582,6 @@ export async function exportExecutiveExcelReport(params: {
     fgColor: { argb: 'FF165B9D' },
   };
 
-  // Panoramic photo area (Cols H-J, Rows 1-2)
   sheet2.mergeCells('H1:J2');
   sheet2.getCell('H1').fill = {
     type: 'pattern',
@@ -584,7 +606,6 @@ export async function exportExecutiveExcelReport(params: {
   sheet2.getRow(4).height = 22;
   sheet2.getRow(5).height = 28;
 
-  // Sheet 2 KPI Cards referencing Sheet 1
   const s2Kpis = [
     {
       titleCols: 'A4:B4',
@@ -703,15 +724,14 @@ export async function exportExecutiveExcelReport(params: {
 
   sheet2.getRow(6).height = 12;
 
-  // Section Headers Row 7: Comparative Analysis Table (Cols A-G) + Operational Insights (Cols H-J)
   const s2HeaderRow = sheet2.getRow(7);
   s2HeaderRow.height = 26;
 
   sheet2.mergeCells('A7:G7');
   const compTitleCell = sheet2.getCell('A7');
   compTitleCell.value = isAr
-    ? 'التحليل المقارن لأداء المزادات'
-    : 'Comparative Auction Performance Analysis';
+    ? `التحليل المقارن لأداء المزادات — شهر ${monthNameAr} ${selectedPeriod.year}`
+    : `Comparative Auction Performance Analysis — ${monthNameEn} ${selectedPeriod.year}`;
   compTitleCell.font = {
     name: 'Cairo',
     size: 12,
@@ -755,7 +775,6 @@ export async function exportExecutiveExcelReport(params: {
     c.alignment = { horizontal: 'center', vertical: 'middle' };
   }
 
-  // Row 8: Sub-headers for Comparative Table
   const compSubHeaderRow = sheet2.getRow(8);
   compSubHeaderRow.height = 24;
   const compCols = isAr
@@ -822,7 +841,6 @@ export async function exportExecutiveExcelReport(params: {
     c.alignment = { horizontal: 'center', vertical: 'middle' };
   });
 
-  // Rows 9..9+N-1: Comparative Table + Operational Notes/Challenges/Recommendations
   const s2StartRow = 9;
   auctions.forEach((auc, idx) => {
     const rIdx = s2StartRow + idx;
@@ -922,14 +940,13 @@ export async function exportExecutiveExcelReport(params: {
     }
   });
 
-  // Executive Summary & Ranked Sale Rate Visual Bars Block below Comparative Table
-  const summaryStartRow = s2StartRow + auctions.length + 2;
+  const summaryStartRow = s2StartRow + effectiveRowCount + 2;
   sheet2.getRow(summaryStartRow).height = 26;
   sheet2.mergeCells(`A${summaryStartRow}:D${summaryStartRow}`);
   const execSumHeader = sheet2.getCell(`A${summaryStartRow}`);
   execSumHeader.value = isAr
-    ? 'الملخص التنفيذي لنتائج المزادات'
-    : 'Executive Summary of Auction Results';
+    ? `الملخص التنفيذي لنتائج المزادات — شهر ${monthNameAr} ${selectedPeriod.year}`
+    : `Executive Summary — ${monthNameEn} ${selectedPeriod.year}`;
   execSumHeader.font = {
     name: 'Cairo',
     size: 12,
@@ -1004,7 +1021,7 @@ export async function exportExecutiveExcelReport(params: {
         ? `${metrics.highestSaleAuction.auctionNumber} (${metrics.highestSaleAuction.saleRate.toFixed(
             1
           )}%)`
-        : '-',
+        : '—',
       color: 'FF16843A',
       bg: 'FFE3F3E6',
     },
@@ -1014,7 +1031,7 @@ export async function exportExecutiveExcelReport(params: {
         ? `${metrics.lowestSaleAuction.auctionNumber} (${metrics.lowestSaleAuction.saleRate.toFixed(
             1
           )}%)`
-        : '-',
+        : '—',
       color: 'FFB4232C',
       bg: 'FFFCE8E6',
     },
@@ -1096,7 +1113,6 @@ export async function exportExecutiveExcelReport(params: {
     }
   }
 
-  // Generate & Trigger Download
   const buffer = await workbook.xlsx.writeBuffer();
   const blob = new Blob([buffer], {
     type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
@@ -1104,9 +1120,11 @@ export async function exportExecutiveExcelReport(params: {
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
-  a.download = 'SAAED_Auction_Executive_Report.xlsx';
+  a.download = fileName;
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);
   URL.revokeObjectURL(url);
+
+  return fileName;
 }

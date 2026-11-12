@@ -1,18 +1,31 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   ClipboardList,
   ClipboardCheck,
   AlertTriangle,
   Lightbulb,
   SlidersHorizontal,
+  Plus,
+  PieChart,
+  BarChart3,
+  TrendingUp,
+  Gavel,
+  CheckCircle2,
+  ArrowUpRight,
+  ArrowDownRight,
+  FileCheck2,
 } from 'lucide-react';
 import {
   AuctionRecord,
   ComputedAuctionMetrics,
   Language,
   PerformanceThresholds,
+  ReportingPeriod,
 } from '../types/auction';
-import { evaluateAuctionPerformance } from '../services/storageService';
+import {
+  evaluateAuctionPerformance,
+  getMonthName,
+} from '../services/storageService';
 import {
   GoldenGavelIcon,
   NavyCarIcon,
@@ -22,33 +35,62 @@ import {
   AscendingBarsIcon,
   ExcelSheetIcon,
 } from './CustomIcons';
+import { ReportingPeriodBar } from './ReportingPeriodBar';
 
 interface ExecutiveDashboardProps {
   auctions: AuctionRecord[];
   metrics: ComputedAuctionMetrics;
   thresholds: PerformanceThresholds;
+  selectedPeriod: ReportingPeriod;
+  yearsWithData: number[];
+  countsByPeriodKey: Record<string, number>;
+  showStandalonePeriodBar?: boolean;
   lang: Language;
   pixelPerfectMode: boolean;
+  onSelectPeriod: (year: number, month: number) => void;
+  onPrevMonth: () => void;
+  onNextMonth: () => void;
+  onReturnToCurrentMonth: () => void;
+  onOpenAddModal: () => void;
   onOpenThresholdModal: () => void;
   onSwitchToSheet1?: () => void;
+  migrationState?: 'pending_approval' | 'completed';
+  onOpenMigrationModal?: () => void;
 }
 
 export const ExecutiveDashboard: React.FC<ExecutiveDashboardProps> = ({
   auctions,
   metrics,
   thresholds,
+  selectedPeriod,
+  yearsWithData,
+  countsByPeriodKey,
+  showStandalonePeriodBar = false,
   lang,
   pixelPerfectMode,
+  onSelectPeriod,
+  onPrevMonth,
+  onNextMonth,
+  onReturnToCurrentMonth,
+  onOpenAddModal,
   onOpenThresholdModal,
   onSwitchToSheet1,
+  migrationState,
+  onOpenMigrationModal,
 }) => {
   const isAr = lang === 'ar';
   const assetBase = import.meta.env.BASE_URL || './';
+  const monthNameAr = getMonthName(selectedPeriod.month, 'ar');
+  const monthNameEn = getMonthName(selectedPeriod.month, 'en');
 
-  // Sorted descending by saleRate for Horizontal Bar Chart
-  const sortedBySaleRate = [...auctions].sort((a, b) => b.saleRate - a.saleRate);
+  const [hoveredAuctionId, setHoveredAuctionId] = useState<string | null>(null);
 
-  // Dynamic Y-axis max for Clustered Bar Chart (minimum 350 to match reference)
+  // Sorted descending by saleRate for Horizontal Bar Chart (Card 4)
+  const sortedBySaleRate = [...auctions].sort(
+    (a, b) => b.saleRate - a.saleRate
+  );
+
+  // Dynamic Y-axis max for Clustered Bar Chart (Card 3 - minimum 350 to match reference)
   const maxListedValue = Math.max(
     300,
     ...auctions.map((a) => a.listedVehicles)
@@ -64,15 +106,22 @@ export const ExecutiveDashboard: React.FC<ExecutiveDashboardProps> = ({
     Math.round(yAxisMax * (6 / 7)),
     yAxisMax,
   ];
-  const standardTicks = yAxisMax === 350 ? [0, 50, 100, 150, 200, 250, 300, 350] : yTicks;
+  const standardTicks =
+    yAxisMax === 350 ? [0, 50, 100, 150, 200, 250, 300, 350] : yTicks;
 
-  // Doughnut Chart Geometry
-  const radius = 50;
+  // Doughnut Chart Geometry (Card 2)
+  const radius = 52;
   const circumference = 2 * Math.PI * radius;
-  const soldFraction = Math.min(1, Math.max(0, metrics.overallSaleRate / 100));
-  const unsoldFraction = Math.max(0, 1 - soldFraction);
+  const hasVehicles = metrics.totalListed > 0;
+  const soldFraction = hasVehicles
+    ? Math.min(1, Math.max(0, metrics.overallSaleRate / 100))
+    : 0;
+  const unsoldFraction = hasVehicles ? Math.max(0, 1 - soldFraction) : 0;
   const soldStroke = soldFraction * circumference;
   const unsoldStroke = unsoldFraction * circumference;
+
+  // Dynamic SVG width for Clustered Bar Chart when many auctions exist
+  const barChartSvgWidth = Math.max(390, auctions.length * 76 + 50);
 
   return (
     <section
@@ -80,7 +129,9 @@ export const ExecutiveDashboard: React.FC<ExecutiveDashboardProps> = ({
       dir={isAr ? 'rtl' : 'ltr'}
       className="print-sheet w-full bg-[#F4F7FB] rounded-[18px] border border-[#BCC8D6] shadow-[0_4px_20px_rgba(18,59,112,0.08)] overflow-hidden p-2.5 sm:p-3.5 transition-all"
     >
-      {/* 1. EXECUTIVE DASHBOARD HEADER BANNER */}
+      {/* =====================================================================
+          1. EXECUTIVE DASHBOARD HEADER BANNER (UNTOUCHED)
+         ===================================================================== */}
       <div
         dir="ltr"
         className="relative w-full rounded-t-[14px] overflow-hidden bg-white border border-[#CBD5E1] shadow-xs"
@@ -110,10 +161,10 @@ export const ExecutiveDashboard: React.FC<ExecutiveDashboardProps> = ({
                 ? 'لوحة التحليل التنفيذي لأداء المزادات'
                 : 'Executive Auction Performance Dashboard'}
             </h2>
-            <p className="text-[13.5px] sm:text-[17px] font-bold text-white/95 font-en tracking-wide leading-tight mt-0.5">
+            <p className="text-[13px] sm:text-[16px] font-bold text-white/95 font-en tracking-wide leading-tight mt-0.5">
               {isAr
-                ? 'Executive Auction Performance Dashboard'
-                : 'لوحة التحليل التنفيذي لأداء المزادات'}
+                ? `Executive Auction Performance Dashboard — ${monthNameAr} ${selectedPeriod.year}`
+                : `تقرير مزادات شهر ${monthNameAr} ${selectedPeriod.year}`}
             </p>
 
             {/* Diagonal Right Transition */}
@@ -138,7 +189,25 @@ export const ExecutiveDashboard: React.FC<ExecutiveDashboardProps> = ({
         </div>
       </div>
 
-      {/* 2. SIX KPI CARDS ROW */}
+      {/* Show ReportingPeriodBar here when viewing Sheet 2 standalone */}
+      {showStandalonePeriodBar && (
+        <ReportingPeriodBar
+          selectedPeriod={selectedPeriod}
+          yearsWithData={yearsWithData}
+          countsByPeriodKey={countsByPeriodKey}
+          lang={lang}
+          migrationState={migrationState}
+          onSelectPeriod={onSelectPeriod}
+          onPrevMonth={onPrevMonth}
+          onNextMonth={onNextMonth}
+          onReturnToCurrentMonth={onReturnToCurrentMonth}
+          onOpenMigrationModal={onOpenMigrationModal}
+        />
+      )}
+
+      {/* =====================================================================
+          2. SIX KPI CARDS ROW (UNTOUCHED)
+         ===================================================================== */}
       <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-2.5 my-2.5">
         {/* Card 1: Total Auctions */}
         <div className="bg-white border border-[#BCC8D6] rounded-[14px] px-3 py-2 shadow-[0_2px_5px_rgba(18,59,112,0.06)] flex items-center justify-between">
@@ -222,257 +291,409 @@ export const ExecutiveDashboard: React.FC<ExecutiveDashboardProps> = ({
         </div>
       </div>
 
-      {/* 3. MIDDLE ANALYTICS ROW (Exact Left-to-Right Visual Placement from Reference Image) */}
+      {/* =====================================================================
+          3. ROW 1 — QUANTITATIVE ANALYSIS (4 PREMIUM CARDS)
+             Card 1: الملخص التنفيذي لنتائج المزادات
+             Card 2: توزيع نتائج المزادات
+             Card 3: مقارنة أداء المزادات
+             Card 4: نسبة نجاح البيع حسب المزاد
+         ===================================================================== */}
       <div
         dir="ltr"
-        className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-[22fr_22fr_28fr_28fr] gap-2.5 items-stretch"
+        className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-[23fr_23fr_27fr_27fr] gap-3.5 items-stretch"
       >
-        {/* PANEL 1 (Far Left, 22%): Executive Summary Card */}
+        {/* -------------------------------------------------------------------
+            CARD 1: الملخص التنفيذي لنتائج المزادات (Executive Summary Card)
+           ------------------------------------------------------------------- */}
         <div
           dir={isAr ? 'rtl' : 'ltr'}
-          className="bg-white border border-[#BCC8D6] rounded-[14px] shadow-[0_2px_5px_rgba(18,59,112,0.05)] overflow-hidden flex flex-col justify-between"
+          className="bg-white border border-[#D5DFEC] rounded-[16px] shadow-[0_4px_14px_rgba(18,59,112,0.06)] overflow-hidden flex flex-col justify-between"
         >
           <div>
+            {/* Navy Gradient Header */}
             <div
               style={{
                 background:
-                  'linear-gradient(180deg, #165B9D 0%, #123B70 100%)',
+                  'linear-gradient(135deg, #175A9C 0%, #123B70 100%)',
               }}
-              className="px-3 py-1.5 text-white flex items-center justify-center gap-2"
+              className="px-4 py-2.5 text-white flex items-center justify-between border-b border-[#0E2F5A]"
             >
-              <ClipboardList className="w-4 h-4 text-white shrink-0" />
-              <h3 className="text-[13.5px] sm:text-[14px] font-extrabold tracking-tight whitespace-nowrap">
-                {isAr
-                  ? 'الملخص التنفيذي لنتائج المزادات'
-                  : 'Executive Auction Summary'}
-              </h3>
+              <div className="flex items-center gap-2">
+                <span className="w-7 h-7 rounded-lg bg-white/15 flex items-center justify-center shrink-0">
+                  <ClipboardList className="w-4 h-4 text-[#D6A348]" />
+                </span>
+                <h3 className="text-[14px] sm:text-[14.5px] font-extrabold tracking-tight whitespace-nowrap">
+                  {isAr
+                    ? 'الملخص التنفيذي لنتائج المزادات'
+                    : 'Executive Auction Summary'}
+                </h3>
+              </div>
+              <span className="text-[11px] font-bold text-white/80 whitespace-nowrap">
+                {monthNameAr} {selectedPeriod.year}
+              </span>
             </div>
 
-            <ul className="px-3.5 py-2 space-y-1 text-[13px] font-extrabold text-[#0F172A]">
-              <li className="flex items-center gap-1.5">
-                <span className="text-[#123B70] text-base leading-none">•</span>
-                <span>{isAr ? 'عدد المزادات:' : 'Total Auctions:'}</span>
-                <span className="tabular-nums font-black">
-                  {metrics.totalAuctions}
+            {/* Structured Metrics List with Dividers */}
+            <div className="px-4 py-2.5 divide-y divide-slate-100">
+              <div className="py-1.5 flex items-center justify-between gap-2">
+                <span className="text-[12.5px] font-bold text-[#64748B]">
+                  {isAr ? 'عدد المزادات' : 'Total Auctions'}
                 </span>
-              </li>
-              <li className="flex items-center gap-1.5">
-                <span className="text-[#123B70] text-base leading-none">•</span>
-                <span>
-                  {isAr ? 'إجمالي المركبات المعروضة:' : 'Total Listed Vehicles:'}
+                <span className="text-[16px] font-black text-[#123B70] tabular-nums">
+                  {metrics.totalAuctions.toLocaleString('en-US')}
                 </span>
-                <span className="tabular-nums font-black">
+              </div>
+
+              <div className="py-1.5 flex items-center justify-between gap-2">
+                <span className="text-[12.5px] font-bold text-[#64748B]">
+                  {isAr ? 'إجمالي المركبات المعروضة' : 'Total Listed Vehicles'}
+                </span>
+                <span className="text-[16px] font-black text-[#14243D] tabular-nums">
                   {metrics.totalListed.toLocaleString('en-US')}
                 </span>
-              </li>
-              <li className="flex items-center gap-1.5">
-                <span className="text-[#123B70] text-base leading-none">•</span>
-                <span>{isAr ? 'عدد المركبات المبيعة:' : 'Total Sold Vehicles:'}</span>
-                <span className="tabular-nums font-black">
+              </div>
+
+              <div className="py-1.5 flex items-center justify-between gap-2">
+                <span className="text-[12.5px] font-bold text-[#64748B]">
+                  {isAr ? 'إجمالي المركبات المبيعة' : 'Total Sold Vehicles'}
+                </span>
+                <span className="text-[16px] font-black text-[#16843B] tabular-nums">
                   {metrics.totalSold.toLocaleString('en-US')}
                 </span>
-              </li>
-              <li className="flex items-center gap-1.5">
-                <span className="text-[#123B70] text-base leading-none">•</span>
-                <span>
-                  {isAr ? 'عدد المركبات غير المبيعة:' : 'Total Unsold Vehicles:'}
+              </div>
+
+              <div className="py-1.5 flex items-center justify-between gap-2">
+                <span className="text-[12.5px] font-bold text-[#64748B]">
+                  {isAr
+                    ? 'إجمالي المركبات غير المبيعة'
+                    : 'Total Unsold Vehicles'}
                 </span>
-                <span className="tabular-nums font-black">
+                <span className="text-[16px] font-black text-[#C52B36] tabular-nums">
                   {metrics.totalUnsold.toLocaleString('en-US')}
                 </span>
-              </li>
-              <li className="flex items-center gap-1.5">
-                <span className="text-[#123B70] text-base leading-none">•</span>
-                <span>
-                  {isAr ? 'النسبة الإجمالية للبيع:' : 'Overall Sale Rate:'}
+              </div>
+
+              <div className="py-1.5 flex items-center justify-between gap-2">
+                <span className="text-[12.5px] font-extrabold text-[#14243D]">
+                  {isAr ? 'النسبة الإجمالية للبيع' : 'Overall Sale Rate'}
                 </span>
-                <span className="tabular-nums font-black text-[#16843A] text-[14px]">
+                <span className="text-[17px] font-black text-[#16843B] tabular-nums">
                   {metrics.overallSaleRate.toFixed(1)}%
                 </span>
-              </li>
-            </ul>
+              </div>
+            </div>
           </div>
 
-          <div className="px-2.5 pb-2 space-y-1.5">
-            {metrics.highestSaleAuction && (
-              <div className="bg-[#E3F3E6] border border-[#B8DFC0] rounded-lg px-2.5 py-1 flex items-center gap-1.5 text-[12px] font-extrabold text-[#0F172A]">
-                <svg
-                  viewBox="0 0 20 20"
-                  className="w-4 h-4 fill-[#289E47] shrink-0"
-                >
-                  <path d="M10 2L17 10H13V18H7V10H3L10 2Z" />
-                </svg>
-                <span className="truncate">
-                  {isAr ? 'أعلى نسبة بيع: المزاد' : 'Highest Sale:'}{' '}
-                  <span className="font-en font-black">
-                    {metrics.highestSaleAuction.auctionNumber}
-                  </span>{' '}
-                  <span className="text-[#16843A] font-black tabular-nums">
-                    ({metrics.highestSaleAuction.saleRate.toFixed(1)}%)
+          {/* Highlighted Highest & Lowest Sale Auction Sub-Cards */}
+          <div className="px-3.5 pb-3 pt-1 space-y-2">
+            {metrics.highestSaleAuction ? (
+              <div className="bg-[#ECFDF3] border border-[#ABEFC6] rounded-[11px] px-3 py-2 flex items-center justify-between gap-2">
+                <div className="flex items-center gap-1.5 min-w-0">
+                  <span className="w-6 h-6 rounded-md bg-[#16843B] text-white flex items-center justify-center shrink-0">
+                    <ArrowUpRight className="w-3.5 h-3.5" />
                   </span>
-                </span>
+                  <span className="text-[12px] font-extrabold text-[#14243D] whitespace-nowrap">
+                    {isAr ? 'أعلى نسبة بيع' : 'Highest Sale'}
+                  </span>
+                </div>
+                <div className="flex items-center gap-1.5 shrink-0">
+                  <span className="auction-id font-en text-[12px] font-black px-2 py-0.5 rounded-md bg-white text-[#123B70] border border-[#86EFAC] shadow-2xs">
+                    {metrics.highestSaleAuction.auctionNumber}
+                  </span>
+                  <span
+                    dir="ltr"
+                    className="text-[13px] font-black text-[#16843B] tabular-nums whitespace-nowrap"
+                  >
+                    {metrics.highestSaleAuction.saleRate.toFixed(1)}%
+                  </span>
+                </div>
+              </div>
+            ) : (
+              <div className="bg-slate-50 border border-slate-200 rounded-[11px] px-3 py-2 text-center text-[11.5px] font-bold text-[#64748B]">
+                {isAr
+                  ? `لا توجد بيانات لشهر ${monthNameAr} ${selectedPeriod.year}`
+                  : `No data for ${monthNameEn} ${selectedPeriod.year}`}
               </div>
             )}
 
             {metrics.lowestSaleAuction && (
-              <div className="bg-[#FCE8E6] border border-[#F3C2BF] rounded-lg px-2.5 py-1 flex items-center gap-1.5 text-[12px] font-extrabold text-[#0F172A]">
-                <svg
-                  viewBox="0 0 20 20"
-                  className="w-4 h-4 fill-[#D9383A] shrink-0"
-                >
-                  <path d="M10 18L3 10H7V2H13V10H17L10 18Z" />
-                </svg>
-                <span className="truncate">
-                  {isAr ? 'أقل نسبة بيع: المزاد' : 'Lowest Sale:'}{' '}
-                  <span className="font-en font-black">
-                    {metrics.lowestSaleAuction.auctionNumber}
-                  </span>{' '}
-                  <span className="text-[#B4232C] font-black tabular-nums">
-                    ({metrics.lowestSaleAuction.saleRate.toFixed(1)}%)
+              <div className="bg-[#FEF3F2] border border-[#FECDCA] rounded-[11px] px-3 py-2 flex items-center justify-between gap-2">
+                <div className="flex items-center gap-1.5 min-w-0">
+                  <span className="w-6 h-6 rounded-md bg-[#C52B36] text-white flex items-center justify-center shrink-0">
+                    <ArrowDownRight className="w-3.5 h-3.5" />
                   </span>
-                </span>
+                  <span className="text-[12px] font-extrabold text-[#14243D] whitespace-nowrap">
+                    {isAr ? 'أقل نسبة بيع' : 'Lowest Sale'}
+                  </span>
+                </div>
+                <div className="flex items-center gap-1.5 shrink-0">
+                  <span className="auction-id font-en text-[12px] font-black px-2 py-0.5 rounded-md bg-white text-[#123B70] border border-[#FCA5A5] shadow-2xs">
+                    {metrics.lowestSaleAuction.auctionNumber}
+                  </span>
+                  <span
+                    dir="ltr"
+                    className="text-[13px] font-black text-[#C52B36] tabular-nums whitespace-nowrap"
+                  >
+                    {metrics.lowestSaleAuction.saleRate.toFixed(1)}%
+                  </span>
+                </div>
               </div>
             )}
           </div>
         </div>
 
-        {/* PANEL 2 (Second from Left, 22%): Doughnut Chart - توزيع نتائج المزادات */}
+        {/* -------------------------------------------------------------------
+            CARD 2: توزيع نتائج المزادات (Doughnut Chart Card)
+           ------------------------------------------------------------------- */}
         <div
           dir={isAr ? 'rtl' : 'ltr'}
-          className="bg-white border border-[#BCC8D6] rounded-[14px] shadow-[0_2px_5px_rgba(18,59,112,0.05)] p-2.5 flex flex-col justify-between"
+          className="bg-white border border-[#D5DFEC] rounded-[16px] shadow-[0_4px_14px_rgba(18,59,112,0.06)] overflow-hidden flex flex-col justify-between"
         >
-          <h3 className="text-center text-[14.5px] font-black text-[#0F294A] mb-1">
-            {isAr ? 'توزيع نتائج المزادات' : 'Auction Results Distribution'}
-          </h3>
+          {/* Header */}
+          <div
+            style={{
+              background: 'linear-gradient(135deg, #175A9C 0%, #123B70 100%)',
+            }}
+            className="px-4 py-2.5 text-white flex items-center justify-between border-b border-[#0E2F5A]"
+          >
+            <div className="flex items-center gap-2">
+              <span className="w-7 h-7 rounded-lg bg-white/15 flex items-center justify-center shrink-0">
+                <PieChart className="w-4 h-4 text-[#D6A348]" />
+              </span>
+              <h3 className="text-[14px] sm:text-[14.5px] font-extrabold tracking-tight whitespace-nowrap">
+                {isAr ? 'توزيع نتائج المزادات' : 'Auction Results Distribution'}
+              </h3>
+            </div>
+          </div>
 
+          {/* Doughnut Chart & Legend */}
           <div
             dir="ltr"
-            className="flex items-center justify-around gap-2 my-auto py-1"
+            className="flex items-center justify-around gap-3 px-3.5 py-3 my-auto"
           >
-            {/* Doughnut SVG matching reference orientation */}
-            <div className="relative w-[138px] h-[138px] shrink-0 flex items-center justify-center">
-              <svg viewBox="0 0 130 130" className="w-full h-full">
-                {/* Sold Arc (Blue #135193) */}
-                <circle
-                  cx="65"
-                  cy="65"
-                  r={radius}
-                  fill="transparent"
-                  stroke="#135193"
-                  strokeWidth="25"
-                  strokeDasharray={`${soldStroke} ${circumference}`}
-                  transform="rotate(-90 65 65)"
-                />
-                {/* Unsold Arc (Red #C92A2A) */}
-                <circle
-                  cx="65"
-                  cy="65"
-                  r={radius}
-                  fill="transparent"
-                  stroke="#C92A2A"
-                  strokeWidth="25"
-                  strokeDasharray={`${unsoldStroke} ${circumference}`}
-                  strokeDashoffset={-soldStroke}
-                  transform="rotate(-90 65 65)"
-                />
-                {/* Labels inside ring */}
-                {metrics.overallUnsoldRate >= 8 && (
-                  <text
-                    x="42"
-                    y="27"
-                    textAnchor="middle"
-                    fill="#FFFFFF"
-                    fontSize="10"
-                    fontWeight="800"
-                  >
-                    {metrics.overallUnsoldRate.toFixed(1)}%
-                  </text>
-                )}
-                {metrics.overallSaleRate >= 20 && (
-                  <text
-                    x="74"
-                    y="116"
-                    textAnchor="middle"
-                    fill="#FFFFFF"
-                    fontSize="10.5"
-                    fontWeight="800"
-                  >
-                    {metrics.overallSaleRate.toFixed(1)}%
-                  </text>
+            {/* Balanced Doughnut SVG with spacious viewBox so nothing ever clips */}
+            <div className="relative w-[144px] h-[144px] shrink-0 flex items-center justify-center">
+              <svg viewBox="0 0 140 140" className="w-full h-full">
+                {!hasVehicles ? (
+                  <circle
+                    cx="70"
+                    cy="70"
+                    r={radius}
+                    fill="transparent"
+                    stroke="#E2E8F0"
+                    strokeWidth="24"
+                  />
+                ) : (
+                  <>
+                    {/* Sold Arc (Executive Blue #175A9C) */}
+                    <circle
+                      cx="70"
+                      cy="70"
+                      r={radius}
+                      fill="transparent"
+                      stroke="#175A9C"
+                      strokeWidth="24"
+                      strokeDasharray={`${soldStroke} ${circumference}`}
+                      transform="rotate(-90 70 70)"
+                    />
+                    {/* Unsold Arc (Danger Red #C52B36) */}
+                    <circle
+                      cx="70"
+                      cy="70"
+                      r={radius}
+                      fill="transparent"
+                      stroke="#C52B36"
+                      strokeWidth="24"
+                      strokeDasharray={`${unsoldStroke} ${circumference}`}
+                      strokeDashoffset={-soldStroke}
+                      transform="rotate(-90 70 70)"
+                    />
+                    {/* Percentage Labels inside ring */}
+                    {metrics.overallUnsoldRate >= 8 && (
+                      <text
+                        x="45"
+                        y="29"
+                        textAnchor="middle"
+                        fill="#FFFFFF"
+                        fontSize="10"
+                        fontWeight="800"
+                        className="font-en"
+                      >
+                        {metrics.overallUnsoldRate.toFixed(1)}%
+                      </text>
+                    )}
+                    {metrics.overallSaleRate >= 20 && (
+                      <text
+                        x="78"
+                        y="122"
+                        textAnchor="middle"
+                        fill="#FFFFFF"
+                        fontSize="10.5"
+                        fontWeight="800"
+                        className="font-en"
+                      >
+                        {metrics.overallSaleRate.toFixed(1)}%
+                      </text>
+                    )}
+                  </>
                 )}
               </svg>
-              {/* Center Hole Total */}
+              {/* Center Hole Total Vehicles */}
               <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none text-center">
-                <span className="text-[17px] font-black text-[#0F172A] tabular-nums leading-none">
+                <span className="text-[19px] font-black text-[#14243D] tabular-nums leading-none">
                   {metrics.totalListed.toLocaleString('en-US')}
                 </span>
-                <span className="text-[12.5px] font-extrabold text-[#0F172A] mt-0.5">
-                  {isAr ? 'مركبة' : 'Vehicles'}
+                <span className="text-[12px] font-extrabold text-[#64748B] mt-1">
+                  {isAr ? 'مركبة مدرجة' : 'Vehicles'}
                 </span>
               </div>
             </div>
 
-            {/* Right Legend */}
-            <div dir={isAr ? 'rtl' : 'ltr'} className="space-y-3 text-right">
-              <div>
-                <div className="flex items-center gap-1.5 text-[12.5px] font-extrabold text-[#0F172A]">
-                  <span className="w-3 h-3 rounded-[2px] bg-[#135193] shrink-0" />
-                  <span>{isAr ? 'المركبات المبيعة' : 'Sold Vehicles'}</span>
+            {/* Structured Legend */}
+            <div dir={isAr ? 'rtl' : 'ltr'} className="space-y-3 flex-1 min-w-0">
+              <div className="p-2 rounded-xl bg-[#F4F7FB] border border-[#E2E8F0]">
+                <div className="flex items-center gap-1.5 text-[12px] font-extrabold text-[#14243D]">
+                  <span className="w-3 h-3 rounded-[3px] bg-[#175A9C] shrink-0" />
+                  <span className="truncate">
+                    {isAr ? 'المركبات المبيعة' : 'Sold Vehicles'}
+                  </span>
                 </div>
-                <div className="text-[12.5px] font-black tabular-nums text-[#0F172A] mt-0.5 ps-4">
-                  {metrics.totalSold.toLocaleString('en-US')}{' '}
-                  <span className="text-[#135193]">
+                <div className="flex items-baseline justify-between gap-1 mt-1 ps-4">
+                  <span className="text-[15px] font-black tabular-nums text-[#14243D]">
+                    {metrics.totalSold.toLocaleString('en-US')}
+                  </span>
+                  <span
+                    dir="ltr"
+                    className="text-[12px] font-black tabular-nums text-[#175A9C]"
+                  >
                     ({metrics.overallSaleRate.toFixed(1)}%)
                   </span>
                 </div>
               </div>
 
-              <div>
-                <div className="flex items-center gap-1.5 text-[12.5px] font-extrabold text-[#0F172A]">
-                  <span className="w-3 h-3 rounded-[2px] bg-[#C92A2A] shrink-0" />
-                  <span>
+              <div className="p-2 rounded-xl bg-[#FEF3F2]/70 border border-[#FECDCA]">
+                <div className="flex items-center gap-1.5 text-[12px] font-extrabold text-[#14243D]">
+                  <span className="w-3 h-3 rounded-[3px] bg-[#C52B36] shrink-0" />
+                  <span className="truncate">
                     {isAr ? 'المركبات غير المبيعة' : 'Unsold Vehicles'}
                   </span>
                 </div>
-                <div className="text-[12.5px] font-black tabular-nums text-[#B4232C] mt-0.5 ps-4">
-                  {metrics.totalUnsold.toLocaleString('en-US')} (
-                  {metrics.overallUnsoldRate.toFixed(1)}%)
+                <div className="flex items-baseline justify-between gap-1 mt-1 ps-4">
+                  <span className="text-[15px] font-black tabular-nums text-[#C52B36]">
+                    {metrics.totalUnsold.toLocaleString('en-US')}
+                  </span>
+                  <span
+                    dir="ltr"
+                    className="text-[12px] font-black tabular-nums text-[#C52B36]"
+                  >
+                    ({metrics.overallUnsoldRate.toFixed(1)}%)
+                  </span>
                 </div>
               </div>
             </div>
           </div>
+
+          {/* Bottom Overall Sale Rate Progress Strip */}
+          <div className="px-4 pb-3 pt-1.5 border-t border-slate-100 bg-[#F8FAFC]">
+            <div className="flex items-center justify-between text-[11.5px] font-extrabold mb-1">
+              <span className="text-[#64748B]">
+                {isAr ? 'مؤشر نسبة البيع الإجمالية' : 'Overall Sale Rate Index'}
+              </span>
+              <span
+                dir="ltr"
+                className="text-[#16843B] font-black tabular-nums"
+              >
+                {metrics.overallSaleRate.toFixed(1)}%
+              </span>
+            </div>
+            <div
+              dir="ltr"
+              className="w-full h-2.5 bg-[#E2E8F0] rounded-full overflow-hidden flex"
+            >
+              <div
+                style={{ width: `${Math.min(100, metrics.overallSaleRate)}%` }}
+                className="h-full bg-gradient-to-r from-[#175A9C] to-[#16843B] transition-all duration-300"
+              />
+              <div
+                style={{
+                  width: `${Math.min(100, metrics.overallUnsoldRate)}%`,
+                }}
+                className="h-full bg-[#C52B36] transition-all duration-300"
+              />
+            </div>
+          </div>
         </div>
 
-        {/* PANEL 3 (Third from Left, 28%): Clustered Bar Chart - مقارنة أداء المزادات */}
-        <div className="bg-white border border-[#BCC8D6] rounded-[14px] shadow-[0_2px_5px_rgba(18,59,112,0.05)] p-2.5 flex flex-col justify-between">
-          <h3 className="text-center text-[14.5px] font-black text-[#0F294A] mb-1">
-            {isAr ? 'مقارنة أداء المزادات' : 'Auction Performance Comparison'}
-          </h3>
+        {/* -------------------------------------------------------------------
+            CARD 3: مقارنة أداء المزادات (Clustered Bar Chart Card)
+           ------------------------------------------------------------------- */}
+        <div
+          dir={isAr ? 'rtl' : 'ltr'}
+          className="bg-white border border-[#D5DFEC] rounded-[16px] shadow-[0_4px_14px_rgba(18,59,112,0.06)] overflow-hidden flex flex-col justify-between"
+        >
+          {/* Header */}
+          <div
+            style={{
+              background: 'linear-gradient(135deg, #175A9C 0%, #123B70 100%)',
+            }}
+            className="px-4 py-2.5 text-white flex items-center justify-between border-b border-[#0E2F5A]"
+          >
+            <div className="flex items-center gap-2">
+              <span className="w-7 h-7 rounded-lg bg-white/15 flex items-center justify-center shrink-0">
+                <BarChart3 className="w-4 h-4 text-[#D6A348]" />
+              </span>
+              <h3 className="text-[14px] sm:text-[14.5px] font-extrabold tracking-tight whitespace-nowrap">
+                {isAr ? 'مقارنة أداء المزادات' : 'Auction Performance Comparison'}
+              </h3>
+            </div>
+          </div>
 
-          {/* Precision SVG Clustered Bar Chart */}
-          <div className="w-full flex-1 flex flex-col justify-center">
-            <svg viewBox="0 0 380 155" className="w-full h-auto overflow-visible">
+          {/* Clustered Column Chart Body */}
+          <div
+            dir="ltr"
+            className="w-full flex-1 flex flex-col justify-center px-3 pt-3 pb-1 overflow-x-auto"
+          >
+            <svg
+              viewBox={`0 0 ${barChartSvgWidth} 165`}
+              className="w-full h-auto min-w-[340px] overflow-visible"
+            >
+              <defs>
+                <linearGradient id="barNavyGrad" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor="#2467B2" />
+                  <stop offset="100%" stopColor="#123B70" />
+                </linearGradient>
+                <linearGradient id="barGreenGrad" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor="#22A04B" />
+                  <stop offset="100%" stopColor="#16843B" />
+                </linearGradient>
+                <linearGradient id="barRedGrad" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor="#E03E49" />
+                  <stop offset="100%" stopColor="#C52B36" />
+                </linearGradient>
+              </defs>
+
               {/* Horizontal Grid Lines & Y-Axis Labels */}
               {standardTicks.map((tick) => {
-                const y = 128 - (tick / yAxisMax) * 112;
+                const y = 134 - (tick / yAxisMax) * 116;
                 return (
                   <g key={tick}>
                     <line
-                      x1="34"
+                      x1="36"
                       y1={y}
-                      x2="372"
+                      x2={barChartSvgWidth - 10}
                       y2={y}
                       stroke="#E2E8F0"
+                      strokeDasharray={tick === 0 ? undefined : '3 3'}
                       strokeWidth="1"
                     />
                     <text
-                      x="28"
+                      x="30"
                       y={y + 3.5}
                       textAnchor="end"
-                      fill="#1E293B"
+                      fill="#64748B"
                       fontSize="10"
                       fontWeight="700"
-                      className="font-en"
+                      className="font-en tabular-nums"
                     >
                       {tick}
                     </text>
@@ -480,81 +701,169 @@ export const ExecutiveDashboard: React.FC<ExecutiveDashboardProps> = ({
                 );
               })}
 
-              {/* Clustered Bars per Auction */}
-              {auctions.map((auc, i) => {
-                const count = Math.max(1, auctions.length);
-                const slotWidth = 336 / count;
-                const groupCenter = 36 + slotWidth * i + slotWidth / 2;
-                const barWidth = Math.min(13, Math.max(6, slotWidth * 0.2));
+              {auctions.length === 0 ? (
+                <text
+                  x={barChartSvgWidth / 2}
+                  y="80"
+                  textAnchor="middle"
+                  fill="#64748B"
+                  fontSize="12"
+                  fontWeight="800"
+                >
+                  {isAr
+                    ? `لا توجد مزادات مسجلة لشهر ${monthNameAr} ${selectedPeriod.year}`
+                    : `No auctions recorded for ${monthNameEn} ${selectedPeriod.year}`}
+                </text>
+              ) : (
+                auctions.map((auc, i) => {
+                  const count = Math.max(1, auctions.length);
+                  const usableWidth = barChartSvgWidth - 48;
+                  const slotWidth = usableWidth / count;
+                  const groupCenter = 38 + slotWidth * i + slotWidth / 2;
+                  const barWidth = Math.min(14, Math.max(8, slotWidth * 0.22));
 
-                const listedH = (auc.listedVehicles / yAxisMax) * 112;
-                const soldH = (auc.soldVehicles / yAxisMax) * 112;
-                const unsoldH = (auc.unsoldVehicles / yAxisMax) * 112;
+                  const listedH = (auc.listedVehicles / yAxisMax) * 116;
+                  const soldH = (auc.soldVehicles / yAxisMax) * 116;
+                  const unsoldH = (auc.unsoldVehicles / yAxisMax) * 116;
+                  const isHovered = hoveredAuctionId === auc.id;
 
-                return (
-                  <g key={auc.id}>
-                    {/* Listed Bar (Navy #123B70) */}
-                    <rect
-                      x={groupCenter - barWidth * 1.5 - 1.5}
-                      y={128 - listedH}
-                      width={barWidth}
-                      height={Math.max(1, listedH)}
-                      fill="#123B70"
-                      rx="1"
+                  return (
+                    <g
+                      key={auc.id}
+                      onMouseEnter={() => setHoveredAuctionId(auc.id)}
+                      onMouseLeave={() => setHoveredAuctionId(null)}
+                      className="cursor-pointer"
                     >
-                      <title>{`${auc.auctionNumber} - ${
-                        isAr ? 'المدرجة' : 'Listed'
-                      }: ${auc.listedVehicles}`}</title>
-                    </rect>
-                    {/* Sold Bar (Green #2E8B46) */}
-                    <rect
-                      x={groupCenter - barWidth * 0.5}
-                      y={128 - soldH}
-                      width={barWidth}
-                      height={Math.max(1, soldH)}
-                      fill="#2E8B46"
-                      rx="1"
-                    >
-                      <title>{`${auc.auctionNumber} - ${
-                        isAr ? 'المبيعة' : 'Sold'
-                      }: ${auc.soldVehicles}`}</title>
-                    </rect>
-                    {/* Unsold Bar (Red #D63333) */}
-                    <rect
-                      x={groupCenter + barWidth * 0.5 + 1.5}
-                      y={128 - unsoldH}
-                      width={barWidth}
-                      height={Math.max(1, unsoldH)}
-                      fill="#D63333"
-                      rx="1"
-                    >
-                      <title>{`${auc.auctionNumber} - ${
-                        isAr ? 'غير المبيعة' : 'Unsold'
-                      }: ${auc.unsoldVehicles}`}</title>
-                    </rect>
+                      {/* Hover highlight column background */}
+                      {isHovered && (
+                        <rect
+                          x={groupCenter - barWidth * 2}
+                          y="14"
+                          width={barWidth * 4}
+                          height="120"
+                          fill="#F1F5F9"
+                          rx="4"
+                        />
+                      )}
 
-                    {/* X-Axis Auction Code */}
-                    <text
-                      x={groupCenter}
-                      y="143"
-                      textAnchor="middle"
-                      fill="#0F172A"
-                      fontSize="9.5"
-                      fontWeight="800"
-                      className="font-en"
-                    >
-                      {auc.auctionNumber}
-                    </text>
-                  </g>
-                );
-              })}
+                      {/* Listed Bar (Navy Gradient) */}
+                      <rect
+                        x={groupCenter - barWidth * 1.5 - 2}
+                        y={134 - listedH}
+                        width={barWidth}
+                        height={Math.max(1.5, listedH)}
+                        fill="url(#barNavyGrad)"
+                        rx="2.5"
+                      >
+                        <title>{`${auc.auctionNumber} — ${
+                          isAr ? 'المركبات المدرجة' : 'Listed'
+                        }: ${auc.listedVehicles}`}</title>
+                      </rect>
+
+                      {/* Sold Bar (Green Gradient) */}
+                      <rect
+                        x={groupCenter - barWidth * 0.5}
+                        y={134 - soldH}
+                        width={barWidth}
+                        height={Math.max(1.5, soldH)}
+                        fill="url(#barGreenGrad)"
+                        rx="2.5"
+                      >
+                        <title>{`${auc.auctionNumber} — ${
+                          isAr ? 'المركبات المبيعة' : 'Sold'
+                        }: ${auc.soldVehicles} (${auc.saleRate.toFixed(1)}%)`}</title>
+                      </rect>
+
+                      {/* Unsold Bar (Red Gradient) */}
+                      <rect
+                        x={groupCenter + barWidth * 0.5 + 2}
+                        y={134 - unsoldH}
+                        width={barWidth}
+                        height={Math.max(1.5, unsoldH)}
+                        fill="url(#barRedGrad)"
+                        rx="2.5"
+                      >
+                        <title>{`${auc.auctionNumber} — ${
+                          isAr ? 'المركبات غير المبيعة' : 'Unsold'
+                        }: ${auc.unsoldVehicles} (${auc.unsoldRate.toFixed(1)}%)`}</title>
+                      </rect>
+
+                      {/* X-Axis Auction Code (Always single-line) */}
+                      <text
+                        x={groupCenter}
+                        y="151"
+                        textAnchor="middle"
+                        fill="#14243D"
+                        fontSize="10"
+                        fontWeight="800"
+                        className="font-en"
+                      >
+                        {auc.auctionNumber}
+                      </text>
+
+                      {/* Interactive SVG Tooltip on Hover */}
+                      {isHovered && (
+                        <g
+                          transform={`translate(${Math.min(
+                            barChartSvgWidth - 115,
+                            Math.max(40, groupCenter - 52)
+                          )}, 6)`}
+                        >
+                          <rect
+                            x="0"
+                            y="0"
+                            width="104"
+                            height="40"
+                            rx="6"
+                            fill="#14243D"
+                            opacity="0.95"
+                          />
+                          <text
+                            x="52"
+                            y="13"
+                            textAnchor="middle"
+                            fill="#D6A348"
+                            fontSize="9.5"
+                            fontWeight="800"
+                            className="font-en"
+                          >
+                            {auc.auctionNumber} ({auc.saleRate.toFixed(1)}%)
+                          </text>
+                          <text
+                            x="52"
+                            y="25"
+                            textAnchor="middle"
+                            fill="#FFFFFF"
+                            fontSize="8.5"
+                            fontWeight="700"
+                            className="font-en"
+                          >
+                            {`Listed: ${auc.listedVehicles} | Sold: ${auc.soldVehicles}`}
+                          </text>
+                          <text
+                            x="52"
+                            y="35"
+                            textAnchor="middle"
+                            fill="#FCA5A5"
+                            fontSize="8.5"
+                            fontWeight="700"
+                            className="font-en"
+                          >
+                            {`Unsold: ${auc.unsoldVehicles}`}
+                          </text>
+                        </g>
+                      )}
+                    </g>
+                  );
+                })
+              )}
 
               {/* Baseline */}
               <line
-                x1="34"
-                y1="128"
-                x2="372"
-                y2="128"
+                x1="36"
+                y1="134"
+                x2={barChartSvgWidth - 10}
+                y2="134"
                 stroke="#94A3B8"
                 strokeWidth="1.2"
               />
@@ -564,77 +873,108 @@ export const ExecutiveDashboard: React.FC<ExecutiveDashboardProps> = ({
           {/* Bottom Legend */}
           <div
             dir={isAr ? 'rtl' : 'ltr'}
-            className="flex items-center justify-center gap-4 text-[11.5px] font-extrabold text-[#0F172A] pt-0.5"
+            className="px-3 py-2 border-t border-slate-100 bg-[#F8FAFC] flex items-center justify-center gap-4 text-[11.5px] font-extrabold text-[#14243D]"
           >
             <div className="flex items-center gap-1.5">
-              <span className="w-3 h-3 rounded-[2px] bg-[#123B70]" />
+              <span className="w-3 h-3 rounded-[3px] bg-[#123B70]" />
               <span>{isAr ? 'المركبات المدرجة' : 'Listed'}</span>
             </div>
             <div className="flex items-center gap-1.5">
-              <span className="w-3 h-3 rounded-[2px] bg-[#2E8B46]" />
+              <span className="w-3 h-3 rounded-[3px] bg-[#16843B]" />
               <span>{isAr ? 'المركبات المبيعة' : 'Sold'}</span>
             </div>
             <div className="flex items-center gap-1.5">
-              <span className="w-3 h-3 rounded-[2px] bg-[#D63333]" />
+              <span className="w-3 h-3 rounded-[3px] bg-[#C52B36]" />
               <span>{isAr ? 'غير المبيعة' : 'Unsold'}</span>
             </div>
           </div>
         </div>
 
-        {/* PANEL 4 (Far Right, 28%): Horizontal Bar Chart - نسبة نجاح البيع حسب المزاد */}
-        <div className="bg-white border border-[#BCC8D6] rounded-[14px] shadow-[0_2px_5px_rgba(18,59,112,0.05)] p-2.5 flex flex-col justify-between">
-          <h3 className="text-center text-[14.5px] font-black text-[#0F294A] mb-1">
-            {isAr
-              ? 'نسبة نجاح البيع حسب المزاد'
-              : 'Sale Success Rate by Auction'}
-          </h3>
+        {/* -------------------------------------------------------------------
+            CARD 4: نسبة نجاح البيع حسب المزاد (Horizontal Bar Chart Card)
+           ------------------------------------------------------------------- */}
+        <div
+          dir={isAr ? 'rtl' : 'ltr'}
+          className="bg-white border border-[#D5DFEC] rounded-[16px] shadow-[0_4px_14px_rgba(18,59,112,0.06)] overflow-hidden flex flex-col justify-between"
+        >
+          {/* Header */}
+          <div
+            style={{
+              background: 'linear-gradient(135deg, #175A9C 0%, #123B70 100%)',
+            }}
+            className="px-4 py-2.5 text-white flex items-center justify-between border-b border-[#0E2F5A]"
+          >
+            <div className="flex items-center gap-2">
+              <span className="w-7 h-7 rounded-lg bg-white/15 flex items-center justify-center shrink-0">
+                <TrendingUp className="w-4 h-4 text-[#D6A348]" />
+              </span>
+              <h3 className="text-[14px] sm:text-[14.5px] font-extrabold tracking-tight whitespace-nowrap">
+                {isAr
+                  ? 'نسبة نجاح البيع حسب المزاد'
+                  : 'Sale Success Rate by Auction'}
+              </h3>
+            </div>
+          </div>
 
-          <div className="flex-1 flex flex-col justify-center space-y-2 px-1">
-            {sortedBySaleRate.map((auc, idx) => {
-              // Gradient shades of green matching reference image
-              const barColors = [
-                '#299449',
-                '#2D9A4D',
-                '#34A053',
-                '#66B748',
-                '#78BE43',
-              ];
-              const barColor = barColors[Math.min(idx, barColors.length - 1)];
-              return (
-                <div
-                  key={auc.id}
-                  className="flex items-center gap-2 text-[11.5px] font-extrabold"
-                >
-                  <span className="w-[54px] text-right font-en font-black text-[#0F172A] shrink-0">
-                    {auc.auctionNumber}
-                  </span>
-                  <div className="flex-1 h-[15px] bg-[#F1F5F9] rounded-xs relative flex items-center">
-                    <div
-                      style={{
-                        width: `${Math.min(100, Math.max(2, auc.saleRate))}%`,
-                        backgroundColor: barColor,
-                      }}
-                      className="h-full rounded-xs transition-all duration-300"
-                    />
-                    <span
-                      style={{
-                        left: `calc(${Math.min(
-                          86,
-                          Math.max(5, auc.saleRate)
-                        )}% + 6px)`,
-                      }}
-                      className="absolute text-[11px] font-black font-en tabular-nums text-[#0F172A]"
-                    >
+          {/* Horizontal Bars Container (LTR orientation for bars, zero line-break on AUC-001) */}
+          <div
+            dir="ltr"
+            className="flex-1 flex flex-col justify-center space-y-2.5 px-3.5 py-3 max-h-[220px] overflow-y-auto"
+          >
+            {sortedBySaleRate.length === 0 ? (
+              <div className="text-center text-xs font-bold text-[#64748B] py-6">
+                {isAr
+                  ? `لا توجد مزادات مسجلة لشهر ${monthNameAr} ${selectedPeriod.year}`
+                  : `No auctions recorded for ${monthNameEn} ${selectedPeriod.year}`}
+              </div>
+            ) : (
+              sortedBySaleRate.map((auc, idx) => {
+                const barGradients = [
+                  'linear-gradient(90deg, #16843B 0%, #22A04B 100%)',
+                  'linear-gradient(90deg, #198D3F 0%, #29A852 100%)',
+                  'linear-gradient(90deg, #1E9645 0%, #34B25D 100%)',
+                  'linear-gradient(90deg, #2D9F4E 0%, #48BC69 100%)',
+                  'linear-gradient(90deg, #3DA858 0%, #5CC476 100%)',
+                ];
+                const barBg =
+                  barGradients[Math.min(idx, barGradients.length - 1)];
+
+                return (
+                  <div
+                    key={auc.id}
+                    className="flex items-center gap-2.5 text-[12px] font-extrabold"
+                  >
+                    {/* Unbreakable Single-Line Auction Code */}
+                    <span className="auction-id w-[66px] justify-end font-en font-black text-[#14243D] text-[12px] shrink-0">
+                      {auc.auctionNumber}
+                    </span>
+
+                    {/* Bar Track */}
+                    <div className="flex-1 h-[18px] bg-[#F1F5F9] rounded-md relative flex items-center overflow-hidden border border-slate-200/70">
+                      <div
+                        style={{
+                          width: `${Math.min(100, Math.max(4, auc.saleRate))}%`,
+                          background: barBg,
+                        }}
+                        className="h-full rounded-e-md transition-all duration-300"
+                      />
+                    </div>
+
+                    {/* Percentage Value Beside Bar */}
+                    <span className="auction-id w-[46px] justify-start font-en text-[12px] font-black tabular-nums text-[#16843B] shrink-0">
                       {auc.saleRate.toFixed(1)}%
                     </span>
                   </div>
-                </div>
-              );
-            })}
+                );
+              })
+            )}
           </div>
 
-          {/* Horizontal Axis 0% .. 100% */}
-          <div className="ps-[62px] pe-6 pt-1.5 border-t border-slate-200 flex items-center justify-between text-[10.5px] font-extrabold font-en text-slate-600 tabular-nums">
+          {/* Horizontal Axis Scale 0% .. 100% */}
+          <div
+            dir="ltr"
+            className="ps-[78px] pe-[58px] py-2 border-t border-slate-100 bg-[#F8FAFC] flex items-center justify-between text-[10.5px] font-extrabold font-en text-[#64748B] tabular-nums"
+          >
             <span>0%</span>
             <span>20%</span>
             <span>40%</span>
@@ -645,22 +985,70 @@ export const ExecutiveDashboard: React.FC<ExecutiveDashboardProps> = ({
         </div>
       </div>
 
-      {/* 4. BOTTOM ROW: VEHICLES PHOTO + COMPARATIVE TABLE + 3 OPERATIONAL CARDS */}
+      {/* =====================================================================
+          4. ROW 2A — VEHICLE AUCTIONS PHOTO CARD + WIDE COMPARATIVE TABLE
+             Card 5: بطاقة صور مزادات المركبات
+             Card 6: التحليل المقارن لأداء المزادات (Wide Desktop View without Horizontal Scroll)
+         ===================================================================== */}
       <div
         dir="ltr"
-        className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-[22fr_28fr_16.6fr_16.7fr_16.7fr] gap-2.5 mt-2.5 items-stretch"
+        className="grid grid-cols-1 xl:grid-cols-12 gap-3.5 mt-3.5 items-stretch"
       >
-        {/* BOTTOM COL 1 (Far Left, 22%): Auction Vehicles Photo + Sheet 2 Badge */}
-        <div className="flex flex-col justify-between gap-1.5">
-          <div className="relative flex-1 min-h-[115px] rounded-[14px] overflow-hidden border border-[#BCC8D6] bg-white shadow-xs">
+        {/* -------------------------------------------------------------------
+            CARD 5: بطاقة صور مزادات المركبات (Vehicle Auctions Showcase Card)
+           ------------------------------------------------------------------- */}
+        <div className="xl:col-span-4 flex flex-col justify-between gap-2">
+          <div className="relative flex-1 min-h-[210px] rounded-[16px] overflow-hidden border border-[#D5DFEC] bg-[#123B70] shadow-[0_4px_14px_rgba(18,59,112,0.08)] group">
             <img
-              src={`${assetBase}assets/dashboard_cars_photo.png`}
-              alt="SAAED Auction Vehicles Lineup"
+              src={`${assetBase}assets/auction_yard_showcase.jpg`}
+              onError={(e) => {
+                e.currentTarget.src = `${assetBase}assets/dashboard_cars_photo.png`;
+              }}
+              alt="مزادات المركبات | Vehicle Auctions"
               referrerPolicy="no-referrer"
-              className="w-full h-full object-cover select-none"
+              className="w-full h-full object-cover object-center select-none group-hover:scale-[1.02] transition-transform duration-500"
             />
+
+            {/* Measured Navy Scrim Overlay over Bottom */}
+            <div className="absolute inset-0 bg-gradient-to-t from-[#0D2B52]/95 via-[#123B70]/35 to-transparent pointer-events-none" />
+
+            {/* Top Period Badge */}
+            <div
+              dir="rtl"
+              className="absolute top-3 right-3 bg-[#123B70]/85 backdrop-blur-xs border border-white/20 text-white px-3 py-1 rounded-lg text-[11px] font-extrabold flex items-center gap-1.5 shadow-sm"
+            >
+              <Gavel className="w-3.5 h-3.5 text-[#D6A348] shrink-0" />
+              <span>
+                {isAr
+                  ? `ساحات مزادات ساعد — ${monthNameAr} ${selectedPeriod.year}`
+                  : `SAAED Auction Yards — ${monthNameEn} ${selectedPeriod.year}`}
+              </span>
+            </div>
+
+            {/* Bottom Caption Bar inside Card */}
+            <div
+              dir="rtl"
+              className="absolute bottom-0 inset-x-0 p-3.5 flex items-end justify-between gap-2 text-white"
+            >
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="w-7 h-7 rounded-lg bg-[#D6A348]/25 border border-[#D6A348]/50 flex items-center justify-center shrink-0">
+                    <Gavel className="w-4 h-4 text-[#D6A348]" />
+                  </span>
+                  <h4 className="text-[14.5px] font-black tracking-tight text-white">
+                    مزادات المركبات | Vehicle Auctions
+                  </h4>
+                </div>
+                <p className="text-[11.5px] font-bold text-white/85 mt-1">
+                  {isAr
+                    ? `إجمالي المعروض: ${metrics.totalListed.toLocaleString('en-US')} مركبة عبر ${metrics.totalAuctions} مزادات معتمدة`
+                    : `Total Listed: ${metrics.totalListed.toLocaleString('en-US')} vehicles across ${metrics.totalAuctions} auctions`}
+                </p>
+              </div>
+            </div>
           </div>
 
+          {/* Sheet 2 Navigation Button (Preserved) */}
           <button
             type="button"
             onClick={onSwitchToSheet1}
@@ -687,242 +1075,401 @@ export const ExecutiveDashboard: React.FC<ExecutiveDashboardProps> = ({
           </button>
         </div>
 
-        {/* BOTTOM COL 2 (Second from Left, 28%): Comparative Analysis Table */}
+        {/* -------------------------------------------------------------------
+            CARD 6: التحليل المقارن لأداء المزادات (Wide Comparative Analysis Table)
+           ------------------------------------------------------------------- */}
         <div
           dir={isAr ? 'rtl' : 'ltr'}
-          className="bg-white border border-[#BCC8D6] rounded-[14px] shadow-[0_2px_5px_rgba(18,59,112,0.05)] overflow-hidden flex flex-col"
+          className="xl:col-span-8 bg-white border border-[#D5DFEC] rounded-[16px] shadow-[0_4px_14px_rgba(18,59,112,0.06)] overflow-hidden flex flex-col"
         >
+          {/* Header */}
           <div
             style={{
-              background: 'linear-gradient(180deg, #165B9D 0%, #123B70 100%)',
+              background: 'linear-gradient(135deg, #175A9C 0%, #123B70 100%)',
             }}
-            className="px-3 py-1.5 text-white flex items-center justify-between"
+            className="px-4 py-2.5 text-white flex items-center justify-between border-b border-[#0E2F5A]"
           >
-            <div className="w-4" />
-            <h3 className="text-[13.5px] font-extrabold text-center whitespace-nowrap">
-              {isAr
-                ? 'التحليل المقارن لأداء المزادات'
-                : 'Comparative Auction Analysis'}
-            </h3>
-            {!pixelPerfectMode ? (
-              <button
-                type="button"
-                onClick={onOpenThresholdModal}
-                title={
-                  isAr
-                    ? 'تعديل حدود تقييم الأداء'
-                    : 'Customize Performance Thresholds'
-                }
-                className="no-print text-white/85 hover:text-white cursor-pointer"
-              >
-                <SlidersHorizontal className="w-3.5 h-3.5" />
-              </button>
-            ) : (
-              <div className="w-4" />
-            )}
+            <div className="flex items-center gap-2">
+              <span className="w-7 h-7 rounded-lg bg-white/15 flex items-center justify-center shrink-0">
+                <FileCheck2 className="w-4 h-4 text-[#D6A348]" />
+              </span>
+              <h3 className="text-[14.5px] font-extrabold whitespace-nowrap">
+                {isAr
+                  ? 'التحليل المقارن لأداء المزادات'
+                  : 'Comparative Auction Performance Analysis'}
+              </h3>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <span className="hidden sm:inline-block text-[11.5px] font-bold text-white/85">
+                {isAr
+                  ? `الفترة: ${monthNameAr} ${selectedPeriod.year}`
+                  : `Period: ${monthNameEn} ${selectedPeriod.year}`}
+              </span>
+              {!pixelPerfectMode && (
+                <button
+                  type="button"
+                  onClick={onOpenThresholdModal}
+                  title={
+                    isAr
+                      ? 'تعديل حدود تقييم الأداء'
+                      : 'Customize Performance Thresholds'
+                  }
+                  className="no-print p-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-white transition-colors cursor-pointer"
+                >
+                  <SlidersHorizontal className="w-3.5 h-3.5" />
+                </button>
+              )}
+            </div>
           </div>
 
+          {/* Full-Width Responsive Table Container (No Horizontal Scrollbar Needed on Desktop) */}
           <div className="overflow-x-auto flex-1">
-            <table className="w-full border-collapse text-center text-[11.5px] font-bold">
+            <table className="w-full border-collapse text-center text-[12.5px] font-bold">
               <thead>
-                <tr className="bg-[#165B9D] text-white font-extrabold">
-                  <th className="py-1 px-1.5 border border-[#4978A8] whitespace-nowrap">
-                    {isAr ? 'رقم المزاد' : 'Auction'}
+                <tr className="bg-[#123B70] text-white font-extrabold border-b border-[#175A9C]">
+                  <th className="py-2.5 px-3 border-e border-[#24528A] whitespace-nowrap">
+                    {isAr ? 'رقم المزاد' : 'Auction ID'}
                   </th>
-                  <th className="py-1 px-1 border border-[#4978A8]">
-                    {isAr ? 'المدرجة' : 'Listed'}
+                  <th className="py-2.5 px-2.5 border-e border-[#24528A] whitespace-nowrap">
+                    {isAr ? 'المركبات المدرجة' : 'Listed Vehicles'}
                   </th>
-                  <th className="py-1 px-1 border border-[#4978A8]">
-                    {isAr ? 'المبيعة' : 'Sold'}
+                  <th className="py-2.5 px-2.5 border-e border-[#24528A] whitespace-nowrap">
+                    {isAr ? 'المركبات المبيعة' : 'Sold Vehicles'}
                   </th>
-                  <th className="py-1 px-1 border border-[#4978A8] whitespace-nowrap">
-                    {isAr ? 'غير المبيعة' : 'Unsold'}
+                  <th className="py-2.5 px-2.5 border-e border-[#24528A] whitespace-nowrap">
+                    {isAr ? 'المركبات غير المبيعة' : 'Unsold Vehicles'}
                   </th>
-                  <th className="py-1 px-1 border border-[#4978A8] whitespace-nowrap">
-                    {isAr ? 'نسبة البيع' : 'Sale %'}
+                  <th className="py-2.5 px-2.5 border-e border-[#24528A] whitespace-nowrap">
+                    {isAr ? 'نسبة البيع' : 'Sale Rate'}
                   </th>
-                  <th className="py-1 px-1 border border-[#4978A8] whitespace-nowrap">
-                    {isAr ? 'نسبة عدم البيع' : 'Unsold %'}
+                  <th className="py-2.5 px-2.5 border-e border-[#24528A] whitespace-nowrap">
+                    {isAr ? 'نسبة عدم البيع' : 'Unsold Rate'}
                   </th>
-                  <th className="py-1 px-1.5 border border-[#4978A8] whitespace-nowrap">
-                    {isAr ? 'تقييم الأداء' : 'Evaluation'}
+                  <th className="py-2.5 px-3 whitespace-nowrap">
+                    {isAr ? 'تقييم الأداء' : 'Performance Evaluation'}
                   </th>
                 </tr>
               </thead>
-              <tbody className="text-[#0F172A]">
-                {auctions.map((auc, i) => {
-                  const badge = evaluateAuctionPerformance(
-                    auc.saleRate,
-                    thresholds,
-                    lang
-                  );
-                  return (
-                    <tr
-                      key={auc.id}
-                      className={
-                        i % 2 === 0
-                          ? 'bg-white border-b border-slate-200'
-                          : 'bg-[#EEF3F9] border-b border-slate-200'
-                      }
+              <tbody className="text-[#14243D] divide-y divide-slate-200">
+                {auctions.length === 0 ? (
+                  <tr>
+                    <td
+                      colSpan={7}
+                      className="py-8 px-4 text-center text-[#64748B] font-bold"
                     >
-                      <td className="py-1 px-1.5 border border-slate-300 font-en font-black tabular-nums whitespace-nowrap">
-                        {auc.auctionNumber}
-                      </td>
-                      <td className="py-1 px-1 border border-slate-300 font-extrabold tabular-nums">
-                        {auc.listedVehicles}
-                      </td>
-                      <td className="py-1 px-1 border border-slate-300 font-extrabold tabular-nums">
-                        {auc.soldVehicles}
-                      </td>
-                      <td className="py-1 px-1 border border-slate-300 font-extrabold tabular-nums">
-                        {auc.unsoldVehicles}
-                      </td>
-                      <td className="py-1 px-1 border border-slate-300 font-black tabular-nums text-[#16843A]">
-                        {auc.saleRate.toFixed(1)}%
-                      </td>
-                      <td className="py-1 px-1 border border-slate-300 font-extrabold tabular-nums text-[#0F172A]">
-                        {auc.unsoldRate.toFixed(1)}%
-                      </td>
-                      <td className="py-0.5 px-1.5 border border-slate-300">
-                        <span
-                          className={`inline-block w-full px-2 py-0.5 rounded-full text-[10.5px] font-extrabold border ${badge.bgClass} ${badge.textClass} ${badge.borderClass} whitespace-nowrap`}
-                        >
-                          {badge.label}
+                      <div className="flex flex-col items-center gap-2">
+                        <span>
+                          {isAr
+                            ? `لا توجد مزادات مسجلة لشهر ${monthNameAr} ${selectedPeriod.year}.`
+                            : `No auctions recorded for ${monthNameEn} ${selectedPeriod.year}.`}
                         </span>
-                      </td>
-                    </tr>
-                  );
-                })}
+                        <button
+                          type="button"
+                          onClick={onOpenAddModal}
+                          className="no-print inline-flex items-center gap-1.5 px-3 py-1.5 text-[12px] font-extrabold text-white bg-[#16843B] hover:bg-[#126E30] rounded-lg cursor-pointer"
+                        >
+                          <Plus className="w-3.5 h-3.5" />
+                          <span>
+                            {isAr
+                              ? 'إضافة أول مزاد لهذا الشهر'
+                              : 'Add First Auction'}
+                          </span>
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ) : (
+                  auctions.map((auc, i) => {
+                    const badge = evaluateAuctionPerformance(
+                      auc.saleRate,
+                      thresholds,
+                      lang
+                    );
+                    return (
+                      <tr
+                        key={auc.id}
+                        className={
+                          i % 2 === 0
+                            ? 'bg-white hover:bg-[#F4F7FB] transition-colors'
+                            : 'bg-[#F8FAFC] hover:bg-[#EEF3F9] transition-colors'
+                        }
+                      >
+                        <td className="py-2 px-3 border-e border-slate-200">
+                          <span className="auction-id font-en font-black text-[#123B70] text-[12.5px] px-2 py-0.5 rounded-md bg-[#EEF3F9] border border-[#CBD5E1]">
+                            {auc.auctionNumber}
+                          </span>
+                        </td>
+                        <td className="py-2 px-2.5 border-e border-slate-200 font-extrabold tabular-nums text-[13px] text-[#14243D]">
+                          {auc.listedVehicles.toLocaleString('en-US')}
+                        </td>
+                        <td className="py-2 px-2.5 border-e border-slate-200 font-extrabold tabular-nums text-[13px] text-[#16843B]">
+                          {auc.soldVehicles.toLocaleString('en-US')}
+                        </td>
+                        <td className="py-2 px-2.5 border-e border-slate-200 font-extrabold tabular-nums text-[13px] text-[#C52B36]">
+                          {auc.unsoldVehicles.toLocaleString('en-US')}
+                        </td>
+                        <td className="py-2 px-2.5 border-e border-slate-200 font-black tabular-nums text-[13px] text-[#16843B]">
+                          <span dir="ltr" className="inline-block">
+                            {auc.saleRate.toFixed(1)}%
+                          </span>
+                        </td>
+                        <td className="py-2 px-2.5 border-e border-slate-200 font-extrabold tabular-nums text-[13px] text-[#64748B]">
+                          <span dir="ltr" className="inline-block">
+                            {auc.unsoldRate.toFixed(1)}%
+                          </span>
+                        </td>
+                        <td className="py-1.5 px-3">
+                          <span
+                            className={`inline-flex items-center justify-center px-3 py-0.5 rounded-full text-[11.5px] font-extrabold border ${badge.bgClass} ${badge.textClass} ${badge.borderClass} whitespace-nowrap`}
+                          >
+                            {badge.label}
+                          </span>
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
               </tbody>
             </table>
           </div>
         </div>
+      </div>
 
-        {/* BOTTOM COL 3 (Third from Left, 16.6%): Operational Notes - أبرز الملاحظات التشغيلية */}
-        <div
-          dir={isAr ? 'rtl' : 'ltr'}
-          className="bg-white border border-[#BCC8D6] rounded-[14px] shadow-[0_2px_5px_rgba(18,59,112,0.05)] overflow-hidden flex flex-col"
-        >
+      {/* =====================================================================
+          5. ROW 2B — THREE EXECUTIVE OPERATIONAL CARDS
+             Card 7: أبرز الملاحظات التشغيلية
+             Card 8: التحديات التشغيلية الرئيسية
+             Card 9: التوصيات والإجراءات التحسينية
+         ===================================================================== */}
+      <div
+        dir={isAr ? 'rtl' : 'ltr'}
+        className="grid grid-cols-1 md:grid-cols-3 gap-3.5 mt-3.5 items-stretch"
+      >
+        {/* -------------------------------------------------------------------
+            CARD 7: أبرز الملاحظات التشغيلية (Key Operational Notes Card)
+           ------------------------------------------------------------------- */}
+        <div className="bg-white border border-[#D5DFEC] rounded-[16px] shadow-[0_4px_14px_rgba(18,59,112,0.06)] overflow-hidden flex flex-col">
+          {/* Blue Gradient Header */}
           <div
             style={{
-              background: 'linear-gradient(180deg, #165B9D 0%, #123B70 100%)',
+              background: 'linear-gradient(135deg, #175A9C 0%, #123B70 100%)',
             }}
-            className="px-2.5 py-1.5 text-white flex items-center justify-center gap-1.5"
+            className="px-4 py-2.5 text-white flex items-center justify-between border-b border-[#0E2F5A]"
           >
-            <ClipboardCheck className="w-4 h-4 text-white shrink-0" />
-            <h3 className="text-[13px] font-extrabold whitespace-nowrap">
-              {isAr ? 'أبرز الملاحظات التشغيلية' : 'Key Operational Notes'}
-            </h3>
+            <div className="flex items-center gap-2">
+              <span className="w-7 h-7 rounded-lg bg-white/15 flex items-center justify-center shrink-0">
+                <ClipboardCheck className="w-4 h-4 text-[#D6A348]" />
+              </span>
+              <h3 className="text-[14px] sm:text-[14.5px] font-extrabold whitespace-nowrap">
+                {isAr ? 'أبرز الملاحظات التشغيلية' : 'Key Operational Notes'}
+              </h3>
+            </div>
+            <span className="text-[11px] font-bold text-white/85 font-en tabular-nums">
+              {auctions.length}
+            </span>
           </div>
-          <ul className="p-2.5 space-y-1.5 text-[12px] font-extrabold text-[#0F172A] flex-1">
-            {auctions.map((auc) => (
-              <li
-                key={auc.id}
-                title={`${auc.auctionNumber}: ${
-                  isAr ? auc.notesAr : auc.notesEn
-                }`}
-                className="flex items-start gap-1.5 leading-snug"
-              >
-                <span className="text-[#123B70] font-black leading-tight">
-                  •
-                </span>
-                <span className="flex-1">
-                  {isAr ? auc.notesAr : auc.notesEn}
-                  {!pixelPerfectMode && (
-                    <span className="ms-1 text-[10px] font-en font-bold text-[#165B9D]">
-                      [{auc.auctionNumber}]
+
+          {/* Subtle Visual Header Strip — Vehicle Inspection & Yard Management */}
+          <div className="relative h-[68px] w-full overflow-hidden bg-[#123B70] border-b border-slate-200 shrink-0">
+            <img
+              src={`${assetBase}assets/operational_notes_inspection.jpg`}
+              onError={(e) => {
+                e.currentTarget.src = `${assetBase}assets/header_top_photo.png`;
+              }}
+              alt="فحص ومعاينة المركبات"
+              referrerPolicy="no-referrer"
+              className="w-full h-full object-cover object-center select-none"
+            />
+            <div className="absolute inset-0 bg-gradient-to-l from-[#123B70]/85 via-[#123B70]/50 to-transparent" />
+            <div className="absolute inset-0 px-3.5 flex items-center justify-between text-white">
+              <span className="text-[11.5px] font-extrabold tracking-wide drop-shadow-xs">
+                {isAr
+                  ? 'تقارير الفحص والمعاينة الميدانية للمركبات'
+                  : 'Field Vehicle Inspection & Yard Reports'}
+              </span>
+            </div>
+          </div>
+
+          {/* Notes List with Independent Single-Line Auction ID Badges */}
+          {auctions.length === 0 ? (
+            <div className="p-6 text-center text-xs font-bold text-[#64748B] my-auto">
+              {isAr
+                ? `لا توجد ملاحظات مسجلة لشهر ${monthNameAr} ${selectedPeriod.year}`
+                : `No notes for ${monthNameEn} ${selectedPeriod.year}`}
+            </div>
+          ) : (
+            <ul className="p-3.5 divide-y divide-slate-100 flex-1">
+              {auctions.map((auc) => (
+                <li
+                  key={auc.id}
+                  className="py-2 first:pt-0.5 last:pb-0.5 flex items-start justify-between gap-2.5"
+                >
+                  <div className="flex items-start gap-2 min-w-0 flex-1">
+                    <span className="w-2 h-2 rounded-full bg-[#175A9C] mt-1.5 shrink-0" />
+                    <span className="text-[12.5px] font-bold text-[#14243D] leading-relaxed">
+                      {isAr ? auc.notesAr : auc.notesEn}
                     </span>
-                  )}
-                </span>
-              </li>
-            ))}
-          </ul>
+                  </div>
+                  <span className="auction-id font-en text-[11px] font-black px-2 py-0.5 rounded-md bg-[#F0F5FA] text-[#175A9C] border border-[#CBD5E1]">
+                    {auc.auctionNumber}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
         </div>
 
-        {/* BOTTOM COL 4 (Fourth from Left, 16.6%): Operational Challenges - التحديات التشغيلية الرئيسية */}
-        <div
-          dir={isAr ? 'rtl' : 'ltr'}
-          className="bg-white border border-[#BCC8D6] rounded-[14px] shadow-[0_2px_5px_rgba(18,59,112,0.05)] overflow-hidden flex flex-col"
-        >
+        {/* -------------------------------------------------------------------
+            CARD 8: التحديات التشغيلية الرئيسية (Operational Challenges Card)
+           ------------------------------------------------------------------- */}
+        <div className="bg-white border border-[#D5DFEC] rounded-[16px] shadow-[0_4px_14px_rgba(18,59,112,0.06)] overflow-hidden flex flex-col">
+          {/* Navy Header with Gold Warning Icon */}
           <div
             style={{
-              background: 'linear-gradient(180deg, #165B9D 0%, #123B70 100%)',
+              background: 'linear-gradient(135deg, #123B70 0%, #0D2B52 100%)',
             }}
-            className="px-2.5 py-1.5 text-white flex items-center justify-center gap-1.5"
+            className="px-4 py-2.5 text-white flex items-center justify-between border-b border-[#0E2F5A]"
           >
-            <AlertTriangle className="w-4 h-4 text-[#FACC15] shrink-0" />
-            <h3 className="text-[13px] font-extrabold whitespace-nowrap">
-              {isAr
-                ? 'التحديات التشغيلية الرئيسية'
-                : 'Operational Challenges'}
-            </h3>
+            <div className="flex items-center gap-2">
+              <span className="w-7 h-7 rounded-lg bg-white/15 flex items-center justify-center shrink-0">
+                <AlertTriangle className="w-4 h-4 text-[#D6A348]" />
+              </span>
+              <h3 className="text-[14px] sm:text-[14.5px] font-extrabold whitespace-nowrap">
+                {isAr
+                  ? 'التحديات التشغيلية الرئيسية'
+                  : 'Operational Challenges'}
+              </h3>
+            </div>
+            <span className="text-[11px] font-bold text-white/85 font-en tabular-nums">
+              {auctions.length}
+            </span>
           </div>
-          <ul className="p-2.5 space-y-1.5 text-[12px] font-extrabold text-[#0F172A] flex-1">
-            {auctions.map((auc) => (
-              <li
-                key={auc.id}
-                title={`${auc.auctionNumber}: ${
-                  isAr ? auc.challengesAr : auc.challengesEn
-                }`}
-                className="flex items-start gap-1.5 leading-snug"
-              >
-                <span className="text-[#123B70] font-black leading-tight">
-                  •
-                </span>
-                <span className="flex-1">
-                  {isAr ? auc.challengesAr : auc.challengesEn}
-                  {!pixelPerfectMode && (
-                    <span className="ms-1 text-[10px] font-en font-bold text-[#922C35]">
-                      [{auc.auctionNumber}]
+
+          {/* Subtle Visual Header Strip — Vehicle Preparation & Storage Yards */}
+          <div className="relative h-[68px] w-full overflow-hidden bg-[#123B70] border-b border-slate-200 shrink-0">
+            <img
+              src={`${assetBase}assets/operational_challenges_yard.jpg`}
+              onError={(e) => {
+                e.currentTarget.src = `${assetBase}assets/header_bottom_photo.png`;
+              }}
+              alt="تجهيز وصيانة المركبات للمزاد"
+              referrerPolicy="no-referrer"
+              className="w-full h-full object-cover object-center select-none"
+            />
+            <div className="absolute inset-0 bg-gradient-to-l from-[#123B70]/85 via-[#123B70]/50 to-transparent" />
+            <div className="absolute inset-0 px-3.5 flex items-center justify-between text-white">
+              <span className="text-[11.5px] font-extrabold tracking-wide drop-shadow-xs">
+                {isAr
+                  ? 'جاهزية ساحات الحجز والصيانة والتجهيز الفني'
+                  : 'Yard Capacity, Maintenance & Pre-Auction Readiness'}
+              </span>
+            </div>
+          </div>
+
+          {/* Challenges List (Dark readable text + amber/red attention marker + independent .auction-id badge) */}
+          {auctions.length === 0 ? (
+            <div className="p-6 text-center text-xs font-bold text-[#64748B] my-auto">
+              {isAr
+                ? `لا توجد تحديات مسجلة لشهر ${monthNameAr} ${selectedPeriod.year}`
+                : `No challenges for ${monthNameEn} ${selectedPeriod.year}`}
+            </div>
+          ) : (
+            <ul className="p-3.5 divide-y divide-slate-100 flex-1">
+              {auctions.map((auc) => (
+                <li
+                  key={auc.id}
+                  className="py-2 first:pt-0.5 last:pb-0.5 flex items-start justify-between gap-2.5"
+                >
+                  <div className="flex items-start gap-2 min-w-0 flex-1">
+                    <span className="w-2 h-2 rounded-full bg-[#D99A24] ring-3 ring-[#FEF3C7] mt-1.5 shrink-0" />
+                    <span className="text-[12.5px] font-bold text-[#14243D] leading-relaxed">
+                      {isAr ? auc.challengesAr : auc.challengesEn}
                     </span>
-                  )}
-                </span>
-              </li>
-            ))}
-          </ul>
+                  </div>
+                  <span className="auction-id font-en text-[11px] font-black px-2 py-0.5 rounded-md bg-[#FEF3F2] text-[#C52B36] border border-[#FECDCA]">
+                    {auc.auctionNumber}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
         </div>
 
-        {/* BOTTOM COL 5 (Far Right, 16.8%): Recommendations - التوصيات والإجراءات التحسينية */}
-        <div
-          dir={isAr ? 'rtl' : 'ltr'}
-          className="bg-white border border-[#BCC8D6] rounded-[14px] shadow-[0_2px_5px_rgba(18,59,112,0.05)] overflow-hidden flex flex-col"
-        >
+        {/* -------------------------------------------------------------------
+            CARD 9: التوصيات والإجراءات التحسينية (Executive Recommendations Card)
+           ------------------------------------------------------------------- */}
+        <div className="bg-white border border-[#D5DFEC] rounded-[16px] shadow-[0_4px_14px_rgba(18,59,112,0.06)] overflow-hidden flex flex-col">
+          {/* Gradient Blue Header with Gold Lightbulb Icon */}
           <div
             style={{
-              background: 'linear-gradient(180deg, #165B9D 0%, #123B70 100%)',
+              background: 'linear-gradient(135deg, #2467B2 0%, #123B70 100%)',
             }}
-            className="px-2.5 py-1.5 text-white flex items-center justify-center gap-1.5"
+            className="px-4 py-2.5 text-white flex items-center justify-between border-b border-[#0E2F5A]"
           >
-            <Lightbulb className="w-4 h-4 text-[#FDE047] shrink-0" />
-            <h3 className="text-[13px] font-extrabold whitespace-nowrap">
-              {isAr
-                ? 'التوصيات والإجراءات التحسينية'
-                : 'Recommendations & Actions'}
-            </h3>
+            <div className="flex items-center gap-2">
+              <span className="w-7 h-7 rounded-lg bg-white/15 flex items-center justify-center shrink-0">
+                <Lightbulb className="w-4 h-4 text-[#D6A348]" />
+              </span>
+              <h3 className="text-[14px] sm:text-[14.5px] font-extrabold whitespace-nowrap">
+                {isAr
+                  ? 'التوصيات والإجراءات التحسينية'
+                  : 'Recommendations & Actions'}
+              </h3>
+            </div>
+            <span className="text-[11px] font-bold text-white/85 font-en tabular-nums">
+              {auctions.length}
+            </span>
           </div>
-          <ul className="p-2.5 space-y-1.5 text-[12px] font-extrabold text-[#0F172A] flex-1">
-            {auctions.map((auc) => (
-              <li
-                key={auc.id}
-                title={`${auc.auctionNumber}: ${
-                  isAr ? auc.recommendationsAr : auc.recommendationsEn
-                }`}
-                className="flex items-start gap-1.5 leading-snug"
-              >
-                <span className="text-[#123B70] font-black leading-tight">
-                  •
-                </span>
-                <span className="flex-1">
-                  {isAr ? auc.recommendationsAr : auc.recommendationsEn}
-                  {!pixelPerfectMode && (
-                    <span className="ms-1 text-[10px] font-en font-bold text-[#16843A]">
-                      [{auc.auctionNumber}]
+
+          {/* Subtle Visual Header Strip — Operations Excellence & Yard Organization */}
+          <div className="relative h-[68px] w-full overflow-hidden bg-[#123B70] border-b border-slate-200 shrink-0">
+            <img
+              src={`${assetBase}assets/recommendations_excellence.jpg`}
+              onError={(e) => {
+                e.currentTarget.src = `${assetBase}assets/dashboard_cars_photo.png`;
+              }}
+              alt="تنظيم ساحات المزادات وإدارة العمليات"
+              referrerPolicy="no-referrer"
+              className="w-full h-full object-cover object-center select-none"
+            />
+            <div className="absolute inset-0 bg-gradient-to-l from-[#123B70]/85 via-[#123B70]/50 to-transparent" />
+            <div className="absolute inset-0 px-3.5 flex items-center justify-between text-white">
+              <span className="text-[11.5px] font-extrabold tracking-wide drop-shadow-xs">
+                {isAr
+                  ? 'تطوير العمليات وتنظيم ساحات المزادات ورفع كفاءة البيع'
+                  : 'Operations Optimization & Auction Yard Excellence'}
+              </span>
+            </div>
+          </div>
+
+          {/* Recommendations List with Subtle Green Check Icon & Unbreakable .auction-id Badge */}
+          {auctions.length === 0 ? (
+            <div className="p-6 text-center text-xs font-bold text-[#64748B] my-auto">
+              {isAr
+                ? `لا توجد توصيات مسجلة لشهر ${monthNameAr} ${selectedPeriod.year}`
+                : `No recommendations for ${monthNameEn} ${selectedPeriod.year}`}
+            </div>
+          ) : (
+            <ul className="p-3.5 divide-y divide-slate-100 flex-1">
+              {auctions.map((auc) => (
+                <li
+                  key={auc.id}
+                  className="py-2 first:pt-0.5 last:pb-0.5 flex items-start justify-between gap-2.5"
+                >
+                  <div className="flex items-start gap-2 min-w-0 flex-1">
+                    <CheckCircle2 className="w-4 h-4 text-[#16843B] mt-0.5 shrink-0" />
+                    <span className="text-[12.5px] font-bold text-[#14243D] leading-relaxed">
+                      {isAr ? auc.recommendationsAr : auc.recommendationsEn}
                     </span>
-                  )}
-                </span>
-              </li>
-            ))}
-          </ul>
+                  </div>
+                  <span className="auction-id font-en text-[11px] font-black px-2 py-0.5 rounded-md bg-[#ECFDF3] text-[#16843B] border border-[#ABEFC6]">
+                    {auc.auctionNumber}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
         </div>
       </div>
     </section>

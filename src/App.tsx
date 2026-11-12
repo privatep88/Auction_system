@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import {
   FileSpreadsheet,
   FileDown,
@@ -19,48 +19,83 @@ import {
   BarChart3,
   CheckCircle2,
   Database,
+  FileSearch,
 } from 'lucide-react';
 import {
   AuctionRecord,
   FirebaseConnectionConfig,
   Language,
   PerformanceThresholds,
+  ReportingPeriod,
   ReportMetadata,
   ViewMode,
 } from './types/auction';
 import {
   calculateMetrics,
   deleteSingleAuctionFromCloud,
+  executeApprovedOctToNovMigration,
+  getAdjacentPeriod,
+  getArchivedPeriodsSummary,
+  getCurrentUaePeriod,
+  getMonthName,
+  getOctToNovMigrationSummary,
   getStoredFirebaseConfig,
   initFirebaseIfConfigured,
-  loadLocalAuctions,
-  loadMetadata,
+  loadPeriodData,
+  loadSelectedPeriod,
   loadThresholds,
   normalizeAuctionRecord,
   persistSingleAuctionToCloud,
-  resetToDefaultData,
+  resetOctoberReferenceData,
+  restorePreMigrationBackup,
   saveFirebaseConfig,
-  saveLocalAuctions,
-  saveMetadata,
+  savePeriodAuctions,
+  savePeriodMetadata,
+  saveSelectedPeriod,
   saveThresholds,
-  syncAuctionsWithCloud,
+  syncPeriodWithCloud,
 } from './services/storageService';
 import { AuctionDataReport } from './components/AuctionDataReport';
 import { ExecutiveDashboard } from './components/ExecutiveDashboard';
 import {
   AuctionFormModal,
   DeleteConfirmModal,
+  MigrationApprovalModal,
   SettingsModal,
+  UnsavedPeriodSwitchModal,
 } from './components/Modals';
 import { exportExecutiveExcelReport } from './services/excelExportService';
-import { exportExecutivePdfReport } from './services/pdfExportService';
+import {
+  exportExecutivePdfReport,
+  triggerOfficialReportPrint,
+} from './services/pdfExportService';
+import {
+  ExecutiveAuctionPrintReport,
+  OfficialReportPreviewModal,
+  PaperSizeOption,
+} from './components/ExecutiveAuctionPrintReport';
 
 export default function App() {
-  const [auctions, setAuctions] = useState<AuctionRecord[]>(() =>
-    loadLocalAuctions()
+  // Initialize migration summary & backup before loading period data
+  const [migrationSummary, setMigrationSummary] = useState(() =>
+    getOctToNovMigrationSummary()
   );
-  const [metadata, setMetadata] = useState<ReportMetadata>(() =>
-    loadMetadata()
+  const [migrationModalOpen, setMigrationModalOpen] = useState<boolean>(false);
+
+  const [selectedPeriod, setSelectedPeriod] = useState<ReportingPeriod>(() =>
+    loadSelectedPeriod()
+  );
+
+  const initialPeriodData = useMemo(
+    () => loadPeriodData(selectedPeriod.year, selectedPeriod.month),
+    []
+  );
+
+  const [auctions, setAuctions] = useState<AuctionRecord[]>(
+    () => initialPeriodData.auctions
+  );
+  const [metadata, setMetadata] = useState<ReportMetadata>(
+    () => initialPeriodData.metadata
   );
   const [thresholds, setThresholds] = useState<PerformanceThresholds>(() =>
     loadThresholds()
@@ -68,6 +103,17 @@ export default function App() {
   const [lang, setLang] = useState<Language>('ar');
   const [viewMode, setViewMode] = useState<ViewMode>('combined');
   const [pixelPerfectMode, setPixelPerfectMode] = useState<boolean>(false);
+
+  // Archive Summary State (tracks which years and months contain records)
+  const [archiveSummary, setArchiveSummary] = useState(() =>
+    getArchivedPeriodsSummary()
+  );
+
+  // Dirty Inline Edit Guard when switching months
+  const [hasUnsavedInlineEdit, setHasUnsavedInlineEdit] =
+    useState<boolean>(false);
+  const [pendingPeriodSwitch, setPendingPeriodSwitch] =
+    useState<ReportingPeriod | null>(null);
 
   // Modals State
   const [formModalOpen, setFormModalOpen] = useState<boolean>(false);
@@ -80,31 +126,140 @@ export default function App() {
   );
   const [settingsModalOpen, setSettingsModalOpen] = useState<boolean>(false);
 
-  // Export & Persistence Status
+  // Export, Print Preview & Persistence Status
   const [isExportingExcel, setIsExportingExcel] = useState<boolean>(false);
   const [isExportingPdf, setIsExportingPdf] = useState<boolean>(false);
+  const [previewModalOpen, setPreviewModalOpen] = useState<boolean>(false);
+  const [paperSize, setPaperSize] = useState<PaperSizeOption>('a4');
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [firebaseConnected, setFirebaseConnected] = useState<boolean>(false);
   const [firebaseConfig, setFirebaseConfig] =
     useState<FirebaseConnectionConfig | null>(() => getStoredFirebaseConfig());
 
   const isAr = lang === 'ar';
+  const currentMonthName = getMonthName(selectedPeriod.month, lang);
+
+  const refreshArchiveSummary = useCallback(() => {
+    setArchiveSummary(getArchivedPeriodsSummary());
+  }, []);
 
   useEffect(() => {
     document.documentElement.dir = isAr ? 'rtl' : 'ltr';
     document.documentElement.lang = lang;
   }, [lang, isAr]);
 
+  // Apply period switch cleanly and synchronously load that month's archived data
+  const executePeriodSwitch = useCallback(
+    (targetYear: number, targetMonth: number) => {
+      const normalizedPeriod: ReportingPeriod = {
+        year: Number(targetYear) || 2026,
+        month: Math.min(12, Math.max(1, Number(targetMonth) || 1)),
+      };
+      setSelectedPeriod(normalizedPeriod);
+      saveSelectedPeriod(normalizedPeriod);
+      setHasUnsavedInlineEdit(false);
+      setPendingPeriodSwitch(null);
+
+      const loaded = loadPeriodData(
+        normalizedPeriod.year,
+        normalizedPeriod.month
+      );
+      setAuctions(loaded.auctions);
+      setMetadata(loaded.metadata);
+      refreshArchiveSummary();
+
+      if (firebaseConnected) {
+        syncPeriodWithCloud(
+          normalizedPeriod.year,
+          normalizedPeriod.month,
+          loaded.auctions
+        ).then(({ records, syncedWithFirestore }) => {
+          setAuctions(records);
+          setFirebaseConnected(syncedWithFirestore);
+          refreshArchiveSummary();
+        });
+      }
+    },
+    [firebaseConnected, refreshArchiveSummary]
+  );
+
+  const requestPeriodSwitch = useCallback(
+    (targetYear: number, targetMonth: number) => {
+      if (
+        targetYear === selectedPeriod.year &&
+        targetMonth === selectedPeriod.month
+      ) {
+        return;
+      }
+      if (hasUnsavedInlineEdit) {
+        setPendingPeriodSwitch({ year: targetYear, month: targetMonth });
+        return;
+      }
+      executePeriodSwitch(targetYear, targetMonth);
+    },
+    [selectedPeriod, hasUnsavedInlineEdit, executePeriodSwitch]
+  );
+
+  const handlePrevMonth = useCallback(() => {
+    const prev = getAdjacentPeriod(
+      selectedPeriod.year,
+      selectedPeriod.month,
+      -1
+    );
+    requestPeriodSwitch(prev.year, prev.month);
+  }, [selectedPeriod, requestPeriodSwitch]);
+
+  const handleNextMonth = useCallback(() => {
+    const next = getAdjacentPeriod(
+      selectedPeriod.year,
+      selectedPeriod.month,
+      1
+    );
+    requestPeriodSwitch(next.year, next.month);
+  }, [selectedPeriod, requestPeriodSwitch]);
+
+  const handleReturnToCurrentMonth = useCallback(() => {
+    const uaeNow = getCurrentUaePeriod(new Date());
+    requestPeriodSwitch(uaeNow.year, uaeNow.month);
+  }, [requestPeriodSwitch]);
+
+  const handleApproveMigrationAndZero = async (
+    conflictMode: 'replace' | 'merge' = 'replace'
+  ) => {
+    const res = await executeApprovedOctToNovMigration(conflictMode);
+    setMigrationSummary(getOctToNovMigrationSummary());
+    refreshArchiveSummary();
+    const loaded = loadPeriodData(selectedPeriod.year, selectedPeriod.month);
+    setAuctions(loaded.auctions);
+    setMetadata(loaded.metadata);
+    setMigrationModalOpen(false);
+    showToast(isAr ? res.messageAr : res.messageEn);
+  };
+
+  const handleRestorePreMigrationBackup = () => {
+    const res = restorePreMigrationBackup();
+    setMigrationSummary(getOctToNovMigrationSummary());
+    refreshArchiveSummary();
+    const loaded = loadPeriodData(selectedPeriod.year, selectedPeriod.month);
+    setAuctions(loaded.auctions);
+    setMetadata(loaded.metadata);
+    setMigrationModalOpen(false);
+    showToast(isAr ? res.messageAr : res.messageEn);
+  };
+
   useEffect(() => {
     const fbStatus = initFirebaseIfConfigured();
     setFirebaseConnected(fbStatus.connected);
     if (fbStatus.connected) {
-      syncAuctionsWithCloud(loadLocalAuctions()).then(
-        ({ records, syncedWithFirestore }) => {
-          setAuctions(records);
-          setFirebaseConnected(syncedWithFirestore);
-        }
-      );
+      syncPeriodWithCloud(
+        selectedPeriod.year,
+        selectedPeriod.month,
+        auctions
+      ).then(({ records, syncedWithFirestore }) => {
+        setAuctions(records);
+        setFirebaseConnected(syncedWithFirestore);
+        refreshArchiveSummary();
+      });
     }
   }, []);
 
@@ -119,16 +274,16 @@ export default function App() {
 
   const handleUpdateMetadata = (newMeta: ReportMetadata) => {
     setMetadata(newMeta);
-    saveMetadata(newMeta);
+    savePeriodMetadata(selectedPeriod.year, selectedPeriod.month, newMeta);
     showToast(
       isAr
-        ? 'تم تحديث تواريخ التقرير وحفظها تلقائياً.'
-        : 'Report dates updated and saved.'
+        ? `تم تحديث تواريخ تقرير شهر ${currentMonthName} ${selectedPeriod.year} وحفظها.`
+        : `Report dates for ${currentMonthName} ${selectedPeriod.year} updated.`
     );
   };
 
   const handleSaveAuctionFromModal = async (record: AuctionRecord) => {
-    const normalized = normalizeAuctionRecord(record);
+    const normalized = normalizeAuctionRecord(record, selectedPeriod);
     let updatedList: AuctionRecord[];
     if (formModalMode === 'add') {
       updatedList = [...auctions, normalized];
@@ -137,19 +292,24 @@ export default function App() {
         a.id === normalized.id ? normalized : a
       );
     }
-    const saved = saveLocalAuctions(updatedList);
+    const saved = savePeriodAuctions(
+      selectedPeriod.year,
+      selectedPeriod.month,
+      updatedList
+    );
     setAuctions(saved);
+    refreshArchiveSummary();
     setFormModalOpen(false);
     setEditingRecord(null);
     await persistSingleAuctionToCloud(normalized);
     showToast(
       formModalMode === 'add'
         ? isAr
-          ? `تمت إضافة المزاد (${normalized.auctionNumber}) وتحديث المؤشرات بنجاح.`
-          : `Auction (${normalized.auctionNumber}) added and KPIs updated.`
+          ? `تمت إضافة المزاد (${normalized.auctionNumber}) لشهر ${currentMonthName} ${selectedPeriod.year} وحفظه.`
+          : `Auction (${normalized.auctionNumber}) added to ${currentMonthName} ${selectedPeriod.year}.`
         : isAr
-        ? `تم حفظ تعديلات المزاد (${normalized.auctionNumber}) بنجاح.`
-        : `Auction (${normalized.auctionNumber}) updated successfully.`
+        ? `تم حفظ تعديلات المزاد (${normalized.auctionNumber}) لشهر ${currentMonthName} ${selectedPeriod.year}.`
+        : `Auction (${normalized.auctionNumber}) updated in ${currentMonthName} ${selectedPeriod.year}.`
     );
   };
 
@@ -170,8 +330,8 @@ export default function App() {
       return {
         ok: false,
         error: isAr
-          ? `رقم المزاد (${cleanCode}) مكرر. يمنع تكرار أرقام المزادات.`
-          : `Duplicate auction number (${cleanCode}) is not allowed.`,
+          ? `رقم المزاد (${cleanCode}) مكرر في شهر ${currentMonthName} ${selectedPeriod.year}. يمنع تكرار أرقام المزادات داخل الشهر نفسه.`
+          : `Duplicate auction number (${cleanCode}) in ${currentMonthName} ${selectedPeriod.year}.`,
       };
     }
     if (draft.listedVehicles <= 0) {
@@ -191,20 +351,30 @@ export default function App() {
       };
     }
 
-    const normalized = normalizeAuctionRecord({
-      ...draft,
-      auctionNumber: cleanCode,
-      updatedAt: new Date().toISOString(),
-    });
+    const normalized = normalizeAuctionRecord(
+      {
+        ...draft,
+        year: selectedPeriod.year,
+        month: selectedPeriod.month,
+        auctionNumber: cleanCode,
+        updatedAt: new Date().toISOString(),
+      },
+      selectedPeriod
+    );
     const updatedList = auctions.map((a) =>
       a.id === normalized.id ? normalized : a
     );
-    const saved = saveLocalAuctions(updatedList);
+    const saved = savePeriodAuctions(
+      selectedPeriod.year,
+      selectedPeriod.month,
+      updatedList
+    );
     setAuctions(saved);
+    refreshArchiveSummary();
     persistSingleAuctionToCloud(normalized);
     showToast(
       isAr
-        ? `تم تحديث بيانات المزاد (${normalized.auctionNumber}) والمؤشرات التنفيذية.`
+        ? `تم تحديث بيانات المزاد (${normalized.auctionNumber}) لشهر ${currentMonthName} ${selectedPeriod.year}.`
         : `Auction (${normalized.auctionNumber}) updated.`
     );
     return { ok: true };
@@ -212,60 +382,77 @@ export default function App() {
 
   const handleConfirmDelete = async (record: AuctionRecord) => {
     const updated = auctions.filter((a) => a.id !== record.id);
-    const saved = saveLocalAuctions(updated);
+    const saved = savePeriodAuctions(
+      selectedPeriod.year,
+      selectedPeriod.month,
+      updated
+    );
     setAuctions(saved);
+    refreshArchiveSummary();
     setDeletingRecord(null);
-    await deleteSingleAuctionFromCloud(record.id);
+    await deleteSingleAuctionFromCloud(record);
     showToast(
       isAr
-        ? `تم حذف المزاد (${record.auctionNumber}) وتحديث التقرير.`
-        : `Auction (${record.auctionNumber}) deleted.`
+        ? `تم حذف المزاد (${record.auctionNumber}) من شهر ${currentMonthName} ${selectedPeriod.year}.`
+        : `Auction (${record.auctionNumber}) deleted from ${currentMonthName} ${selectedPeriod.year}.`
     );
   };
 
   const handleManualSaveAll = async () => {
-    const saved = saveLocalAuctions(auctions);
-    saveMetadata(metadata);
+    const saved = savePeriodAuctions(
+      selectedPeriod.year,
+      selectedPeriod.month,
+      auctions
+    );
+    savePeriodMetadata(selectedPeriod.year, selectedPeriod.month, metadata);
     saveThresholds(thresholds);
     setAuctions(saved);
+    refreshArchiveSummary();
     if (firebaseConnected) {
-      await syncAuctionsWithCloud(saved);
+      await syncPeriodWithCloud(
+        selectedPeriod.year,
+        selectedPeriod.month,
+        saved
+      );
     }
     showToast(
       firebaseConnected
         ? isAr
-          ? 'تم حفظ البيانات محلياً ومزامنتها مع سحابة Firebase Firestore بنجاح.'
-          : 'Data saved locally and synced with Firebase Firestore.'
+          ? `تم حفظ بيانات شهر ${currentMonthName} ${selectedPeriod.year} محلياً ومزامنتها مع Firebase Firestore.`
+          : `Saved ${currentMonthName} ${selectedPeriod.year} locally and synced with Firestore.`
         : isAr
-        ? 'تم حفظ جميع السجلات والإعدادات بنجاح في وحدة التخزين الدائمة.'
-        : 'All records and settings saved to persistent storage.'
+        ? `تم حفظ وأرشفة سجلات شهر ${currentMonthName} ${selectedPeriod.year} بنجاح.`
+        : `Archived records for ${currentMonthName} ${selectedPeriod.year} saved.`
     );
   };
 
   const handleRefreshReport = () => {
-    const reloaded = loadLocalAuctions();
-    setAuctions([...reloaded]);
+    const reloaded = loadPeriodData(selectedPeriod.year, selectedPeriod.month);
+    setAuctions([...reloaded.auctions]);
+    setMetadata({ ...reloaded.metadata });
+    refreshArchiveSummary();
     showToast(
       isAr
-        ? 'تم تحديث التقرير وإعادة حساب جميع المؤشرات والرسوم البيانية.'
-        : 'Report refreshed and all metrics recalculated.'
+        ? `تم تحديث تقرير شهر ${currentMonthName} ${selectedPeriod.year} وإعادة حساب المؤشرات.`
+        : `Refreshed report for ${currentMonthName} ${selectedPeriod.year}.`
     );
   };
 
   const handleExportExcel = async () => {
     try {
       setIsExportingExcel(true);
-      await exportExecutiveExcelReport({
+      const exportedFileName = await exportExecutiveExcelReport({
         auctions,
         metrics,
         metadata,
+        selectedPeriod,
         thresholds,
         lang,
       });
       showToast(
         isAr
-          ? 'تم تصدير ملف SAAED_Auction_Executive_Report.xlsx (شامل الشعار والصور والمعادلات).'
-          : 'Exported SAAED_Auction_Executive_Report.xlsx with formulas and branding.'
+          ? `تم تصدير ملف ${exportedFileName} لشهر ${currentMonthName} ${selectedPeriod.year}.`
+          : `Exported ${exportedFileName} for ${currentMonthName} ${selectedPeriod.year}.`
       );
     } catch (err) {
       console.error('Excel export failed:', err);
@@ -282,27 +469,36 @@ export default function App() {
   const handleExportPdf = async () => {
     try {
       setIsExportingPdf(true);
-      await exportExecutivePdfReport({
+      const exportedFileName = await exportExecutivePdfReport({
         metadata,
+        selectedPeriod,
         lang,
+        paperSize,
       });
       showToast(
         isAr
-          ? 'تم تصدير التقرير التنفيذي بصيغة PDF بنجاح.'
-          : 'Executive PDF report exported successfully.'
+          ? `تم تصدير التقرير الرسمي (${exportedFileName}) لشهر ${currentMonthName} ${selectedPeriod.year} بنجاح.`
+          : `Exported official report (${exportedFileName}) for ${currentMonthName} ${selectedPeriod.year}.`
       );
-    } catch (err) {
-      console.error('PDF export failed:', err);
+    } catch (error) {
+      console.error('PDF_EXPORT_FAILED:', {
+        message: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined,
+        selectedPeriod,
+        paperSize,
+      });
       showToast(
-        isAr ? 'حدث خطأ أثناء تصدير ملف PDF.' : 'Failed to export PDF report.'
+        isAr
+          ? 'تعذر إنشاء ملف PDF. يرجى إعادة المحاولة.'
+          : 'Unable to generate PDF file. Please try again.'
       );
     } finally {
       setIsExportingPdf(false);
     }
   };
 
-  const handlePrint = () => {
-    window.print();
+  const handlePrint = async () => {
+    await triggerOfficialReportPrint(paperSize);
   };
 
   return (
@@ -310,6 +506,9 @@ export default function App() {
       dir={isAr ? 'rtl' : 'ltr'}
       className="min-h-screen bg-[#E4ECF5] text-[#0F172A] flex flex-col"
     >
+      {/* INTERACTIVE WORKSPACE ROOT (Hidden during native printing; Official Report Mount prints instead) */}
+      <div id="interactive-workspace-root" className="flex-1 flex flex-col">
+
       {/* EXECUTIVE ACTION & NAVIGATION TOOLBAR (Hidden when printing) */}
       <header className="no-print sticky top-0 z-40 bg-[#0E2E58] text-white border-b border-[#25548B] shadow-md px-3 py-2">
         <div className="max-w-[1560px] mx-auto flex flex-wrap items-center justify-between gap-2">
@@ -424,6 +623,21 @@ export default function App() {
               </span>
             </button>
 
+            {/* Official Report Preview */}
+            <button
+              type="button"
+              onClick={() => setPreviewModalOpen(true)}
+              title={
+                isAr
+                  ? 'معاينة صفحات التقرير الرسمي (A4 / A3) قبل الطباعة أو تصدير PDF'
+                  : 'Official Multi-Page Print & PDF Preview'
+              }
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-extrabold bg-[#D5A03D] hover:bg-[#C28E2E] text-[#0A1E3C] rounded-lg shadow-xs transition-colors cursor-pointer whitespace-nowrap"
+            >
+              <FileSearch className="w-3.5 h-3.5" />
+              <span>{isAr ? 'معاينة التقرير' : 'Preview Report'}</span>
+            </button>
+
             {/* Export PDF */}
             <button
               type="button"
@@ -435,8 +649,8 @@ export default function App() {
               <span>
                 {isExportingPdf
                   ? isAr
-                    ? 'جاري تصدير PDF...'
-                    : 'Exporting PDF...'
+                    ? 'جارٍ تجهيز التقرير وتصديره...'
+                    : 'Preparing & Exporting PDF...'
                   : isAr
                   ? 'تصدير PDF'
                   : 'Export PDF'}
@@ -524,13 +738,59 @@ export default function App() {
 
       {/* MAIN EXECUTIVE WORKSPACE CANVAS (1536px Reference Max-Width Container) */}
       <main className="flex-1 w-full max-w-[1540px] mx-auto px-2 sm:px-3 py-2.5 space-y-3">
+        {/* PRE-ZEROING MIGRATION SUMMARY & EXPLICIT USER APPROVAL BANNER */}
+        {migrationSummary.migrationState === 'pending_approval' &&
+          !pixelPerfectMode && (
+            <div className="no-print bg-[#FEFCE8] border border-[#FDE047] rounded-[14px] px-4 py-2.5 shadow-xs flex flex-wrap items-center justify-between gap-3">
+              <div className="flex items-center gap-2.5 text-xs sm:text-[13px] font-extrabold text-[#14243D]">
+                <span className="px-2 py-0.5 rounded-md bg-[#123B70] text-[#D6A348] text-[11px] font-black whitespace-nowrap">
+                  {isAr ? 'حماية وترحيل البيانات' : 'Data Migration Protection'}
+                </span>
+                <span>
+                  {isAr
+                    ? `تم إنشاء نسخة احتياطية كاملة ونسخ مزادات أكتوبر 2026 (${migrationSummary.sourceRecords.length} مزادات، ${migrationSummary.totalListedToMigrate.toLocaleString('en-US')} مركبة) إلى نوفمبر 2026 بتطابق 100%. يرجى الموافقة لتنفيذ تصفير أكتوبر وبقية الأشهر.`
+                    : `Full backup created & ${migrationSummary.sourceRecords.length} October 2026 auctions copied to November 2026 (100% parity). Please approve to zero October and other months.`}
+                </span>
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                <button
+                  type="button"
+                  onClick={() => setMigrationModalOpen(true)}
+                  className="px-3 py-1.5 text-xs font-extrabold text-[#123B70] bg-white hover:bg-slate-50 border border-[#CBD5E1] rounded-lg cursor-pointer whitespace-nowrap"
+                >
+                  {isAr
+                    ? 'عرض ملخص المقارنة والنسخة الاحتياطية'
+                    : 'View Summary & Backup'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleApproveMigrationAndZero('replace')}
+                  className="px-3.5 py-1.5 text-xs font-extrabold text-white bg-[#16843B] hover:bg-[#126E30] rounded-lg shadow-2xs cursor-pointer whitespace-nowrap"
+                >
+                  {isAr
+                    ? 'الموافقة وتصفير أكتوبر وبقية الأشهر'
+                    : 'Approve & Zero Other Months'}
+                </button>
+              </div>
+            </div>
+          )}
+
         {(viewMode === 'combined' || viewMode === 'sheet1') && (
           <AuctionDataReport
             auctions={auctions}
             metrics={metrics}
             metadata={metadata}
+            selectedPeriod={selectedPeriod}
+            yearsWithData={archiveSummary.yearsWithData}
+            countsByPeriodKey={archiveSummary.countsByPeriodKey}
             lang={lang}
             pixelPerfectMode={pixelPerfectMode}
+            migrationState={migrationSummary.migrationState}
+            onSelectPeriod={requestPeriodSwitch}
+            onPrevMonth={handlePrevMonth}
+            onNextMonth={handleNextMonth}
+            onReturnToCurrentMonth={handleReturnToCurrentMonth}
+            onOpenMigrationModal={() => setMigrationModalOpen(true)}
             onUpdateMetadata={handleUpdateMetadata}
             onOpenAddModal={() => {
               setFormModalMode('add');
@@ -544,6 +804,7 @@ export default function App() {
             }}
             onDeleteAuction={(rec) => setDeletingRecord(rec)}
             onInlineSaveAuction={handleInlineSaveAuction}
+            onInlineDirtyChange={setHasUnsavedInlineEdit}
             onSwitchToSheet2={() =>
               setViewMode(viewMode === 'sheet1' ? 'sheet2' : 'sheet2')
             }
@@ -555,8 +816,23 @@ export default function App() {
             auctions={auctions}
             metrics={metrics}
             thresholds={thresholds}
+            selectedPeriod={selectedPeriod}
+            yearsWithData={archiveSummary.yearsWithData}
+            countsByPeriodKey={archiveSummary.countsByPeriodKey}
+            showStandalonePeriodBar={viewMode === 'sheet2'}
             lang={lang}
             pixelPerfectMode={pixelPerfectMode}
+            migrationState={migrationSummary.migrationState}
+            onSelectPeriod={requestPeriodSwitch}
+            onPrevMonth={handlePrevMonth}
+            onNextMonth={handleNextMonth}
+            onReturnToCurrentMonth={handleReturnToCurrentMonth}
+            onOpenMigrationModal={() => setMigrationModalOpen(true)}
+            onOpenAddModal={() => {
+              setFormModalMode('add');
+              setEditingRecord(null);
+              setFormModalOpen(true);
+            }}
             onOpenThresholdModal={() => setSettingsModalOpen(true)}
             onSwitchToSheet1={() =>
               setViewMode(viewMode === 'sheet2' ? 'sheet1' : 'sheet1')
@@ -569,6 +845,7 @@ export default function App() {
       <AuctionFormModal
         isOpen={formModalOpen}
         mode={formModalMode}
+        selectedPeriod={selectedPeriod}
         initialRecord={editingRecord}
         existingAuctions={auctions}
         lang={lang}
@@ -584,6 +861,15 @@ export default function App() {
         lang={lang}
         onCancel={() => setDeletingRecord(null)}
         onConfirm={handleConfirmDelete}
+      />
+
+      <UnsavedPeriodSwitchModal
+        pendingPeriod={pendingPeriodSwitch}
+        lang={lang}
+        onCancel={() => setPendingPeriodSwitch(null)}
+        onDiscardAndSwitch={(target) =>
+          executePeriodSwitch(target.year, target.month)
+        }
       />
 
       <SettingsModal
@@ -607,23 +893,68 @@ export default function App() {
           const res = saveFirebaseConfig(cfg);
           setFirebaseConnected(res.connected);
           if (res.connected) {
-            syncAuctionsWithCloud(auctions).then(({ records }) =>
-              setAuctions(records)
-            );
+            syncPeriodWithCloud(
+              selectedPeriod.year,
+              selectedPeriod.month,
+              auctions
+            ).then(({ records }) => {
+              setAuctions(records);
+              refreshArchiveSummary();
+            });
           }
         }}
         onResetDefaults={() => {
-          const def = resetToDefaultData();
-          setAuctions(def.auctions);
-          setMetadata(def.metadata);
+          const def = resetOctoberReferenceData();
+          executePeriodSwitch(2026, 11);
           setThresholds(def.thresholds);
+          setMigrationSummary(getOctToNovMigrationSummary());
           showToast(
             isAr
-              ? 'تمت استعادة البيانات المرجعية الافتراضية (5 مزادات).'
-              : 'Restored default reference data (5 auctions).'
+              ? 'تمت استعادة البيانات المنقولة لشهر نوفمبر 2026 (دون المساس بالأشهر الأخرى).'
+              : 'Restored November 2026 migrated data (other months preserved).'
           );
         }}
       />
+
+      <MigrationApprovalModal
+        isOpen={migrationModalOpen}
+        summary={migrationSummary}
+        lang={lang}
+        onClose={() => setMigrationModalOpen(false)}
+        onApproveMigrationAndZero={handleApproveMigrationAndZero}
+        onRestoreBackup={handleRestorePreMigrationBackup}
+      />
+      </div>
+
+      {/* OFFICIAL MULTI-PAGE REPORT PREVIEW MODAL */}
+      <OfficialReportPreviewModal
+        isOpen={previewModalOpen}
+        auctions={auctions}
+        metrics={metrics}
+        metadata={metadata}
+        thresholds={thresholds}
+        selectedPeriod={selectedPeriod}
+        lang={lang}
+        paperSize={paperSize}
+        isExportingPdf={isExportingPdf}
+        onChangePaperSize={setPaperSize}
+        onClose={() => setPreviewModalOpen(false)}
+        onPrintOfficial={handlePrint}
+        onExportPdfOfficial={handleExportPdf}
+      />
+
+      {/* UNIFIED OFFICIAL REPORT MOUNT FOR NATIVE VECTOR PRINT & PDF EXPORT */}
+      <div id="saaed-official-print-mount" aria-hidden="true">
+        <ExecutiveAuctionPrintReport
+          auctions={auctions}
+          metrics={metrics}
+          metadata={metadata}
+          thresholds={thresholds}
+          selectedPeriod={selectedPeriod}
+          lang={lang}
+          paperSize={paperSize}
+        />
+      </div>
     </div>
   );
 }
