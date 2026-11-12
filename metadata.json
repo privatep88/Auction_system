@@ -1,0 +1,6 @@
+{
+  "name": "SAAED Vehicle Auction Executive Reporting System | نظام التقرير التنفيذي لمزادات المركبات",
+  "description": "نظام ويب مؤسسي متكامل لإدارة تقارير مزادات المركبات ولوحة التحليل التنفيذي لأداء المزادات لشركة ساعد (SAAED).",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
