@@ -470,6 +470,9 @@ export default function App() {
     try {
       setIsExportingPdf(true);
       const exportedFileName = await exportExecutivePdfReport({
+        auctions,
+        metrics,
+        thresholds,
         metadata,
         selectedPeriod,
         lang,
@@ -840,6 +843,17 @@ export default function App() {
           />
         )}
       </main>
+
+      {/* EXECUTIVE CORPORATE FOOTER */}
+      <footer className="no-print mt-auto bg-[#123B70] border-t-2 border-[#D6A348] text-white py-2 px-4 shadow-sm">
+        <div className="max-w-[1540px] mx-auto flex items-center justify-center gap-2.5 text-center text-xs sm:text-[13px] font-bold">
+          <span className="w-1.5 h-1.5 rounded-full bg-[#D6A348] shrink-0" />
+          <span className="text-white font-extrabold tracking-wide">
+            {isAr ? 'إعداد وتصميم: خالد الهاشمي' : 'Prepared & Designed by: Khalid Al Hashemi'}
+          </span>
+          <span className="w-1.5 h-1.5 rounded-full bg-[#D6A348] shrink-0" />
+        </div>
+      </footer>
 
       {/* Modals */}
       <AuctionFormModal

@@ -171,65 +171,63 @@ export const ExecutiveAuctionPrintReport: React.FC<
 
   let runningPageNumber = 0;
 
-  // Shared Compact Header for Pages 2..N
+  // Shared Compact Header for Pages 2..N (RTL 3-Column Grid: Right Logo | Center Title | Left Period & Page Badge)
   const renderCompactHeader = (
     sectionTitleAr: string,
     sectionTitleEn: string,
     pageNum: number
   ) => (
-    <header
-      dir="ltr"
-      className="w-full rounded-[12px] overflow-hidden bg-white border border-[#CBD5E1] mb-3 shrink-0"
-    >
-      <div className="flex items-stretch justify-between h-[58px]">
-        {/* Left Period & Date Badge */}
-        <div className="bg-[#123B70] text-white px-4 flex flex-col justify-center shrink-0 border-r border-[#24528A]">
-          <div className="text-[11px] font-extrabold text-[#D6A348] uppercase tracking-wider font-en">
-            {`PERIOD: ${selectedPeriod.year}-${paddedMonth}`}
-          </div>
-          <div className="text-[11px] font-bold text-[#F1F5F9] font-en">
-            {`Date: ${metadata.reportDate}`}
-          </div>
-        </div>
+    <header className="pdf-compact-header overflow-hidden shrink-0">
+      {/* Right Column: Official SAAED Logo */}
+      <div className="bg-white flex items-center justify-center px-3 py-1.5 border-l border-[#CBD5E1]">
+        <img
+          src={`${assetBase}assets/saaed_logo.png`}
+          alt="SAAED Logo"
+          referrerPolicy="no-referrer"
+          className="max-h-[42px] w-auto object-contain block"
+        />
+      </div>
 
-        {/* Center Gradient Title */}
-        <div
-          dir="rtl"
-          className="flex-1 px-4 flex items-center justify-between text-white"
-          style={{
-            background:
-              'linear-gradient(90deg, #123B70 0%, #175A9C 50%, #123B70 100%)',
-          }}
+      {/* Center Column: Section Title & Month Subtitle */}
+      <div
+        dir={isAr ? 'rtl' : 'ltr'}
+        className="px-5 py-2 flex flex-col items-center justify-center text-center text-white"
+        style={{
+          background:
+            'linear-gradient(90deg, #123B70 0%, #175A9C 50%, #123B70 100%)',
+        }}
+      >
+        <h2
+          style={{ lineHeight: 1.5, letterSpacing: '0px' }}
+          className="text-[16px] font-extrabold text-white m-0"
         >
-          <div>
-            <h2 className="text-[16px] font-black leading-tight text-white">
-              {isAr ? sectionTitleAr : sectionTitleEn}
-            </h2>
-            <p className="text-[11px] font-bold text-[#E2E8F0]">
-              {isAr
-                ? `تقرير مزادات شهر ${monthNameAr} ${selectedPeriod.year} — الفترة من ${metadata.periodStart} إلى ${metadata.periodEnd}`
-                : `Auction Report for ${monthNameEn} ${selectedPeriod.year} — Period: ${metadata.periodStart} to ${metadata.periodEnd}`}
-            </p>
-          </div>
+          {isAr ? sectionTitleAr : sectionTitleEn}
+        </h2>
+        <p
+          style={{ lineHeight: 1.45, letterSpacing: '0px' }}
+          className="text-[11.5px] font-bold text-[#E2BB70] m-0 mt-0.5"
+        >
+          {isAr
+            ? `تقرير مزادات شهر ${monthNameAr} ${selectedPeriod.year}`
+            : `Monthly Auction Report — ${monthNameEn} ${selectedPeriod.year}`}
+        </p>
+      </div>
 
-          <div
-            style={{ backgroundColor: 'rgba(255,255,255,0.16)' }}
-            className="border border-[#93C5FD] rounded-lg px-3 py-1 text-[11.5px] font-extrabold text-white whitespace-nowrap"
-          >
+      {/* Left Column: Period, Report Date & Page Badge */}
+      <div
+        dir="ltr"
+        className="bg-[#123B70] text-white px-3.5 py-1.5 flex flex-col items-center justify-center border-r border-[#24528A] gap-1"
+      >
+        <div className="flex items-center justify-between w-full text-[11px] font-extrabold text-[#E2BB70] font-en">
+          <span>{`${selectedPeriod.year}-${paddedMonth}`}</span>
+          <span className="px-2 py-0.5 rounded bg-[#175A9C] text-white text-[10.5px]">
             {isAr
               ? `صفحة ${pageNum} من ${totalPages}`
               : `Page ${pageNum} of ${totalPages}`}
-          </div>
+          </span>
         </div>
-
-        {/* Right SAAED Logo */}
-        <div className="w-[155px] bg-white flex items-center justify-center px-3 py-1 shrink-0">
-          <img
-            src={`${assetBase}assets/saaed_logo.png`}
-            alt="SAAED Logo"
-            referrerPolicy="no-referrer"
-            className="max-h-[44px] w-auto object-contain"
-          />
+        <div className="text-[10.5px] font-bold text-[#E2E8F0] font-en w-full text-left">
+          {`Date: ${metadata.reportDate}`}
         </div>
       </div>
     </header>
@@ -239,10 +237,11 @@ export const ExecutiveAuctionPrintReport: React.FC<
   const renderPageFooter = (pageNum: number) => (
     <footer
       dir={isAr ? 'rtl' : 'ltr'}
+      style={{ lineHeight: 1.5, letterSpacing: '0px' }}
       className="mt-auto pt-2 border-t border-[#CBD5E1] flex items-center justify-between text-[11px] font-extrabold text-[#123B70] shrink-0"
     >
       <div className="flex items-center gap-2">
-        <span className="w-2 h-2 rounded-full bg-[#D6A348]" />
+        <span className="w-2 h-2 rounded-full bg-[#D6A348] shrink-0" />
         <span>
           {isAr
             ? 'شركة ساعد للأنظمة المرورية (SAAED) — نظام التقرير التنفيذي لمزادات المركبات'
@@ -256,10 +255,18 @@ export const ExecutiveAuctionPrintReport: React.FC<
           : `${monthNameEn} ${selectedPeriod.year} Auction Report | Prepared: ${metadata.reportDate}`}
       </div>
 
-      <div className="px-2.5 py-0.5 rounded-md bg-[#123B70] text-white font-en text-[11px] font-black tabular-nums">
+      {/* Designer & Author Credit */}
+      <div className="flex items-center gap-1.5 text-[#123B70] font-black">
+        <span className="w-1.5 h-1.5 rounded-full bg-[#D6A348] shrink-0" />
+        <span>
+          {isAr ? 'إعداد وتصميم: خالد الهاشمي' : 'Prepared & Designed by: Khalid Al Hashemi'}
+        </span>
+      </div>
+
+      <div className="px-2.5 py-0.5 rounded-md bg-[#123B70] text-white text-[11px] font-black tabular-nums">
         {isAr
-          ? `صفحة ${pageNum} / ${totalPages}`
-          : `Page ${pageNum} / ${totalPages}`}
+          ? `صفحة ${pageNum} من ${totalPages}`
+          : `Page ${pageNum} of ${totalPages}`}
       </div>
     </footer>
   );
@@ -282,65 +289,58 @@ export const ExecutiveAuctionPrintReport: React.FC<
             style={{ width: `${pageWidthPx}px`, height: `${pageHeightPx}px` }}
             className="official-report-page bg-[#F4F7FB] text-[#14243D] p-5 flex flex-col justify-between box-border overflow-hidden border border-[#CBD5E1] shadow-lg print:shadow-none print:border-none"
           >
-            {/* 1. FULL OFFICIAL BANNER HEADER */}
+            {/* 1. DEDICATED OFFICIAL REPORT HEADER (.pdf-report-header)
+                RTL 3-Column Layout:
+                - Right (24%): SAAED Official Logo (.pdf-header-logo)
+                - Center (1fr): Main Title h1 + Subtitle p (.pdf-header-title)
+                - Left (34%): Original Vehicle Auction Yard & Gavel Photo (.pdf-header-image) */}
             <div className="shrink-0">
-              <div
-                dir="ltr"
-                className="w-full rounded-[14px] overflow-hidden bg-white border border-[#CBD5E1]"
-              >
-                <div className="flex items-stretch w-full h-[94px]">
-                  {/* Left Panoramic Auction Yard Photo */}
-                  <div className="w-[40%] h-full shrink-0 overflow-hidden bg-[#123B70]">
-                    <img
-                      src={`${assetBase}assets/header_top_photo.png`}
-                      alt="SAAED Vehicle Auction Yard"
-                      referrerPolicy="no-referrer"
-                      className="w-full h-full object-cover object-right"
-                    />
-                  </div>
-
-                  {/* Center Corporate Navy Banner */}
-                  <div
-                    dir="rtl"
-                    className="relative flex-1 flex flex-col items-center justify-center px-4 py-2 text-center"
-                    style={{
-                      background:
-                        'linear-gradient(180deg, #175A9C 0%, #123B70 65%, #0D2D56 100%)',
-                    }}
-                  >
-                    <h1 className="text-[24px] font-black text-white leading-tight tracking-tight">
-                      {isAr
-                        ? 'التقرير التنفيذي لمزادات المركبات'
-                        : 'Vehicle Auction Executive Report'}
-                    </h1>
-                    <p className="text-[14px] font-bold text-[#D6A348] mt-0.5">
-                      {isAr
-                        ? `تقرير مزادات شهر ${monthNameAr} ${selectedPeriod.year} (${selectedPeriod.year}-${paddedMonth})`
-                        : `Monthly Auction Report — ${monthNameEn} ${selectedPeriod.year} (${selectedPeriod.year}-${paddedMonth})`}
-                    </p>
-                  </div>
-
-                  {/* Right Official SAAED Logo */}
-                  <div className="w-[200px] bg-white flex items-center justify-center px-4 py-2 shrink-0">
+              <div className="w-full rounded-[14px] overflow-hidden bg-white border border-[#CBD5E1]">
+                <header className="pdf-report-header">
+                  {/* Right of Page: Official SAAED Logo (1 Element) */}
+                  <div className="pdf-header-logo">
                     <img
                       src={`${assetBase}assets/saaed_logo.png`}
                       alt="SAAED Logo"
                       referrerPolicy="no-referrer"
-                      className="max-h-[70px] w-auto object-contain"
                     />
                   </div>
-                </div>
+
+                  {/* Center of Page: Main Title (1 h1) + Subtitle (1 p) */}
+                  <div className="pdf-header-title">
+                    <h1>
+                      {isAr
+                        ? 'التقرير التنفيذي لمزادات المركبات'
+                        : 'Vehicle Auction Executive Report'}
+                    </h1>
+                    <p>
+                      {isAr
+                        ? `تقرير مزادات شهر ${monthNameAr} ${selectedPeriod.year}`
+                        : `Monthly Auction Report — ${monthNameEn} ${selectedPeriod.year}`}
+                    </p>
+                  </div>
+
+                  {/* Left of Page: Original Vehicle Auction Yard & Gavel Photo (1 Element) */}
+                  <div className="pdf-header-image">
+                    <img
+                      src={`${assetBase}assets/header_top_photo.png`}
+                      alt="SAAED Vehicle Auction Yard"
+                      referrerPolicy="no-referrer"
+                    />
+                  </div>
+                </header>
 
                 {/* Metadata Sub-Bar */}
                 <div
                   dir={isAr ? 'rtl' : 'ltr'}
+                  style={{ lineHeight: 1.5, letterSpacing: '0px' }}
                   className="bg-[#EEF3F9] border-t border-[#CBD5E1] px-4 py-1.5 flex items-center justify-between text-[12px] font-extrabold text-[#123B70]"
                 >
                   <div className="flex items-center gap-2">
-                    <Calendar className="w-3.5 h-3.5 text-[#175A9C]" />
+                    <Calendar className="w-3.5 h-3.5 text-[#175A9C] shrink-0" />
                     <span>
                       {isAr
-                        ? `الفترة الزمنية للتقرير: شهر ${monthNameAr} ${selectedPeriod.year} (من ${metadata.periodStart} إلى ${metadata.periodEnd})`
+                        ? `الفترة المشمولة بالتقرير: شهر ${monthNameAr} ${selectedPeriod.year} — من ${metadata.periodStart} إلى ${metadata.periodEnd}`
                         : `Reporting Period: ${monthNameEn} ${selectedPeriod.year} (${metadata.periodStart} to ${metadata.periodEnd})`}
                     </span>
                   </div>
@@ -350,7 +350,7 @@ export const ExecutiveAuctionPrintReport: React.FC<
                         ? `تاريخ إعداد التقرير: ${metadata.reportDate}`
                         : `Report Prepared: ${metadata.reportDate}`}
                     </span>
-                    <span className="px-2 py-0.5 rounded bg-[#123B70] text-white text-[11px] font-en">
+                    <span className="px-2.5 py-0.5 rounded bg-[#123B70] text-white text-[11px] font-en">
                       {isAr
                         ? `صفحة ${pageNum} من ${totalPages}`
                         : `Page ${pageNum} of ${totalPages}`}
@@ -359,81 +359,104 @@ export const ExecutiveAuctionPrintReport: React.FC<
                 </div>
               </div>
 
-              {/* 2. SIX EXECUTIVE KPI CARDS */}
-              <div className="grid grid-cols-6 gap-2.5 mt-3">
-                <div className="bg-white border border-[#CBD5E1] rounded-[12px] px-3 py-2.5 flex items-center justify-between">
-                  <div className="text-center flex-1">
-                    <div className="text-[12px] font-extrabold text-[#123B70] whitespace-nowrap">
+              {/* 2. SIX EXECUTIVE KPI CARDS (Spacious 3x2 Grid) */}
+              <div className="grid grid-cols-3 gap-2.5 mt-2.5">
+                <div className="bg-white border border-[#CBD5E1] rounded-[12px] px-4 py-2 flex items-center justify-between">
+                  <div className="text-right flex-1">
+                    <div
+                      style={{ lineHeight: 1.45, letterSpacing: '0px' }}
+                      className="text-[12.5px] font-extrabold text-[#123B70] whitespace-nowrap"
+                    >
                       {isAr ? 'إجمالي عدد المزادات' : 'Total Auctions'}
                     </div>
-                    <div className="text-[24px] font-black text-[#8F242C] tabular-nums leading-tight mt-0.5">
+                    <div className="text-[22px] font-black text-[#8F242C] font-en tabular-nums mt-0.5">
                       {metrics.totalAuctions.toLocaleString('en-US')}
                     </div>
                   </div>
-                  <GoldenGavelIcon className="w-9 h-9 shrink-0" />
+                  <GoldenGavelIcon className="w-8 h-8 shrink-0" />
                 </div>
 
-                <div className="bg-white border border-[#CBD5E1] rounded-[12px] px-3 py-2.5 flex items-center justify-between">
-                  <div className="text-center flex-1">
-                    <div className="text-[12px] font-extrabold text-[#123B70] whitespace-nowrap">
+                <div className="bg-white border border-[#CBD5E1] rounded-[12px] px-4 py-2 flex items-center justify-between">
+                  <div className="text-right flex-1">
+                    <div
+                      style={{ lineHeight: 1.45, letterSpacing: '0px' }}
+                      className="text-[12.5px] font-extrabold text-[#123B70] whitespace-nowrap"
+                    >
                       {isAr ? 'إجمالي المركبات المدرجة' : 'Listed Vehicles'}
                     </div>
-                    <div className="text-[24px] font-black text-[#8F242C] tabular-nums leading-tight mt-0.5">
+                    <div className="text-[22px] font-black text-[#123B70] font-en tabular-nums mt-0.5">
                       {metrics.totalListed.toLocaleString('en-US')}
                     </div>
                   </div>
-                  <NavyCarIcon className="w-9 h-9 shrink-0" />
+                  <NavyCarIcon className="w-8 h-8 shrink-0" />
                 </div>
 
-                <div className="bg-white border border-[#CBD5E1] rounded-[12px] px-3 py-2.5 flex items-center justify-between">
-                  <div className="text-center flex-1">
-                    <div className="text-[12px] font-extrabold text-[#123B70] whitespace-nowrap">
+                <div className="bg-white border border-[#CBD5E1] rounded-[12px] px-4 py-2 flex items-center justify-between">
+                  <div className="text-right flex-1">
+                    <div
+                      style={{ lineHeight: 1.45, letterSpacing: '0px' }}
+                      className="text-[12.5px] font-extrabold text-[#123B70] whitespace-nowrap"
+                    >
                       {isAr ? 'إجمالي المركبات المبيعة' : 'Sold Vehicles'}
                     </div>
-                    <div className="text-[24px] font-black text-[#16843B] tabular-nums leading-tight mt-0.5">
+                    <div className="text-[22px] font-black text-[#16843B] font-en tabular-nums mt-0.5">
                       {metrics.totalSold.toLocaleString('en-US')}
                     </div>
                   </div>
-                  <CarSoldIcon className="w-10 h-9 shrink-0" />
+                  <CarSoldIcon className="w-9 h-8 shrink-0" />
                 </div>
 
-                <div className="bg-white border border-[#CBD5E1] rounded-[12px] px-3 py-2.5 flex items-center justify-between">
-                  <div className="text-center flex-1">
-                    <div className="text-[12px] font-extrabold text-[#123B70] whitespace-nowrap">
-                      {isAr ? 'المركبات غير المبيعة' : 'Unsold Vehicles'}
+                <div className="bg-white border border-[#CBD5E1] rounded-[12px] px-4 py-2 flex items-center justify-between">
+                  <div className="text-right flex-1">
+                    <div
+                      style={{ lineHeight: 1.45, letterSpacing: '0px' }}
+                      className="text-[12.5px] font-extrabold text-[#123B70] whitespace-nowrap"
+                    >
+                      {isAr ? 'إجمالي المركبات غير المبيعة' : 'Unsold Vehicles'}
                     </div>
-                    <div className="text-[24px] font-black text-[#C52B36] tabular-nums leading-tight mt-0.5">
+                    <div className="text-[22px] font-black text-[#C52B36] font-en tabular-nums mt-0.5">
                       {metrics.totalUnsold.toLocaleString('en-US')}
                     </div>
                   </div>
-                  <CarUnsoldIcon className="w-10 h-9 shrink-0" />
+                  <CarUnsoldIcon className="w-9 h-8 shrink-0" />
                 </div>
 
-                <div className="bg-white border border-[#CBD5E1] rounded-[12px] px-3 py-2.5 flex items-center justify-between">
-                  <div className="text-center flex-1">
-                    <div className="text-[12px] font-extrabold text-[#123B70] whitespace-nowrap">
-                      {isAr ? 'نسبة نجاح البيع' : 'Sale Success Rate'}
+                <div className="bg-white border border-[#CBD5E1] rounded-[12px] px-4 py-2 flex items-center justify-between">
+                  <div className="text-right flex-1">
+                    <div
+                      style={{ lineHeight: 1.45, letterSpacing: '0px' }}
+                      className="text-[12.5px] font-extrabold text-[#123B70] whitespace-nowrap"
+                    >
+                      {isAr ? 'نسبة نجاح البيع الإجمالية' : 'Sale Success Rate'}
                     </div>
                     <div
                       dir="ltr"
-                      className="text-[24px] font-black text-[#16843B] tabular-nums leading-tight mt-0.5"
+                      className="text-[22px] font-black text-[#16843B] font-en tabular-nums mt-0.5 text-right"
                     >
                       {metrics.overallSaleRate.toFixed(1)}%
                     </div>
                   </div>
-                  <GoldenTargetIcon className="w-9 h-9 shrink-0" />
+                  <GoldenTargetIcon className="w-8 h-8 shrink-0" />
                 </div>
 
-                <div className="bg-white border border-[#CBD5E1] rounded-[12px] px-3 py-2 flex items-center justify-between">
-                  <div className="text-center flex-1">
-                    <div className="text-[11.5px] font-extrabold text-[#123B70] whitespace-nowrap">
-                      {isAr ? 'متوسط المبيعات / مزاد' : 'Avg Sold / Auction'}
+                <div className="bg-white border border-[#CBD5E1] rounded-[12px] px-4 py-2 flex items-center justify-between">
+                  <div className="text-right flex-1">
+                    <div
+                      style={{ lineHeight: 1.4, letterSpacing: '0px' }}
+                      className="text-[12.5px] font-extrabold text-[#123B70] whitespace-nowrap"
+                    >
+                      {isAr ? 'متوسط المبيعات لكل مزاد' : 'Avg Sold / Auction'}
                     </div>
-                    <div className="text-[22px] font-black text-[#123B70] tabular-nums leading-none mt-0.5">
-                      {metrics.avgSoldPerAuction.toLocaleString('en-US')}
-                    </div>
-                    <div className="text-[10.5px] font-bold text-[#64748B] mt-0.5">
-                      {isAr ? 'مركبة / مزاد' : 'Vehicles / Auction'}
+                    <div className="flex items-baseline gap-1.5 mt-0.5">
+                      <span className="text-[22px] font-black text-[#123B70] font-en tabular-nums">
+                        {metrics.avgSoldPerAuction.toLocaleString('en-US')}
+                      </span>
+                      <span
+                        style={{ lineHeight: 1.35, letterSpacing: '0px' }}
+                        className="text-[11px] font-bold text-[#64748B]"
+                      >
+                        {isAr ? 'مركبة / مزاد' : 'Vehicles / Auction'}
+                      </span>
                     </div>
                   </div>
                   <AscendingBarsIcon className="w-8 h-8 shrink-0" />
@@ -442,7 +465,7 @@ export const ExecutiveAuctionPrintReport: React.FC<
             </div>
 
             {/* 3. PAGE 1 MAIN BODY: EXECUTIVE SUMMARY + DOUGHNUT DISTRIBUTION + AUCTION YARD PHOTO */}
-            <div className="grid grid-cols-12 gap-3.5 my-3 flex-1 items-stretch min-h-0">
+            <div className="grid grid-cols-12 gap-3.5 my-2.5 flex-1 items-stretch min-h-0">
               {/* Executive Summary Card (4 cols) */}
               <div className="col-span-4 bg-white border border-[#CBD5E1] rounded-[14px] overflow-hidden flex flex-col justify-between">
                 <div>
@@ -451,56 +474,74 @@ export const ExecutiveAuctionPrintReport: React.FC<
                       background:
                         'linear-gradient(135deg, #175A9C 0%, #123B70 100%)',
                     }}
-                    className="px-4 py-2.5 text-white flex items-center gap-2"
+                    className="px-4 py-2 text-white flex items-center gap-2"
                   >
-                    <ClipboardList className="w-4 h-4 text-[#D6A348]" />
-                    <h3 className="text-[14.5px] font-extrabold">
+                    <ClipboardList className="w-4 h-4 text-[#D6A348] shrink-0" />
+                    <h3
+                      style={{ lineHeight: 1.5, letterSpacing: '0px' }}
+                      className="text-[14px] font-extrabold m-0"
+                    >
                       {isAr
                         ? 'الملخص التنفيذي لنتائج المزادات'
                         : 'Executive Auction Summary'}
                     </h3>
                   </div>
 
-                  <div className="px-4 py-3 divide-y divide-[#F1F5F9]">
-                    <div className="py-2 flex items-center justify-between">
-                      <span className="text-[13px] font-bold text-[#64748B]">
+                  <div className="px-4 py-2.5 divide-y divide-[#F1F5F9]">
+                    <div className="py-1.5 flex items-center justify-between">
+                      <span
+                        style={{ lineHeight: 1.5, letterSpacing: '0px' }}
+                        className="text-[12.5px] font-bold text-[#64748B]"
+                      >
                         {isAr ? 'إجمالي عدد المزادات المنفذة' : 'Total Auctions'}
                       </span>
-                      <span className="text-[17px] font-black text-[#123B70] tabular-nums">
+                      <span className="text-[16px] font-black text-[#123B70] font-en tabular-nums">
                         {metrics.totalAuctions}
                       </span>
                     </div>
-                    <div className="py-2 flex items-center justify-between">
-                      <span className="text-[13px] font-bold text-[#64748B]">
+                    <div className="py-1.5 flex items-center justify-between">
+                      <span
+                        style={{ lineHeight: 1.5, letterSpacing: '0px' }}
+                        className="text-[12.5px] font-bold text-[#64748B]"
+                      >
                         {isAr ? 'إجمالي المركبات المعروضة' : 'Total Listed'}
                       </span>
-                      <span className="text-[17px] font-black text-[#14243D] tabular-nums">
+                      <span className="text-[16px] font-black text-[#14243D] font-en tabular-nums">
                         {metrics.totalListed.toLocaleString('en-US')}
                       </span>
                     </div>
-                    <div className="py-2 flex items-center justify-between">
-                      <span className="text-[13px] font-bold text-[#64748B]">
+                    <div className="py-1.5 flex items-center justify-between">
+                      <span
+                        style={{ lineHeight: 1.5, letterSpacing: '0px' }}
+                        className="text-[12.5px] font-bold text-[#64748B]"
+                      >
                         {isAr ? 'إجمالي المركبات المبيعة' : 'Total Sold'}
                       </span>
-                      <span className="text-[17px] font-black text-[#16843B] tabular-nums">
+                      <span className="text-[16px] font-black text-[#16843B] font-en tabular-nums">
                         {metrics.totalSold.toLocaleString('en-US')}
                       </span>
                     </div>
-                    <div className="py-2 flex items-center justify-between">
-                      <span className="text-[13px] font-bold text-[#64748B]">
+                    <div className="py-1.5 flex items-center justify-between">
+                      <span
+                        style={{ lineHeight: 1.5, letterSpacing: '0px' }}
+                        className="text-[12.5px] font-bold text-[#64748B]"
+                      >
                         {isAr ? 'إجمالي المركبات غير المبيعة' : 'Total Unsold'}
                       </span>
-                      <span className="text-[17px] font-black text-[#C52B36] tabular-nums">
+                      <span className="text-[16px] font-black text-[#C52B36] font-en tabular-nums">
                         {metrics.totalUnsold.toLocaleString('en-US')}
                       </span>
                     </div>
-                    <div className="py-2 flex items-center justify-between">
-                      <span className="text-[13.5px] font-extrabold text-[#14243D]">
+                    <div className="py-1.5 flex items-center justify-between">
+                      <span
+                        style={{ lineHeight: 1.5, letterSpacing: '0px' }}
+                        className="text-[13px] font-extrabold text-[#14243D]"
+                      >
                         {isAr ? 'النسبة الإجمالية للبيع' : 'Overall Sale Rate'}
                       </span>
                       <span
                         dir="ltr"
-                        className="text-[18px] font-black text-[#16843B] tabular-nums"
+                        className="text-[17px] font-black text-[#16843B] font-en tabular-nums"
                       >
                         {metrics.overallSaleRate.toFixed(1)}%
                       </span>
@@ -509,24 +550,27 @@ export const ExecutiveAuctionPrintReport: React.FC<
                 </div>
 
                 {/* Highest & Lowest Sale Highlight Boxes */}
-                <div className="px-4 pb-3.5 space-y-2">
+                <div className="px-4 pb-3 space-y-2">
                   {metrics.highestSaleAuction && (
-                    <div className="bg-[#ECFDF3] border border-[#ABEFC6] rounded-[10px] px-3 py-2 flex items-center justify-between">
+                    <div className="bg-[#ECFDF3] border border-[#ABEFC6] rounded-[10px] px-3 py-1.5 flex items-center justify-between">
                       <div className="flex items-center gap-2">
-                        <span className="w-6 h-6 rounded-md bg-[#16843B] text-white flex items-center justify-center">
+                        <span className="w-6 h-6 rounded-md bg-[#16843B] text-white flex items-center justify-center shrink-0">
                           <ArrowUpRight className="w-3.5 h-3.5" />
                         </span>
-                        <span className="text-[12.5px] font-extrabold text-[#14243D]">
+                        <span
+                          style={{ lineHeight: 1.5, letterSpacing: '0px' }}
+                          className="text-[12px] font-extrabold text-[#14243D]"
+                        >
                           {isAr ? 'أعلى نسبة بيع' : 'Highest Sale Rate'}
                         </span>
                       </div>
                       <div className="flex items-center gap-1.5">
-                        <span className="auction-id font-en text-[12.5px] font-black px-2.5 py-0.5 rounded bg-white text-[#123B70] border border-[#86EFAC]">
+                        <span className="auction-id font-en text-[12px] font-black px-2.5 py-0.5 rounded bg-white text-[#123B70] border border-[#86EFAC]">
                           {metrics.highestSaleAuction.auctionNumber}
                         </span>
                         <span
                           dir="ltr"
-                          className="text-[13.5px] font-black text-[#16843B] tabular-nums"
+                          className="text-[13px] font-black text-[#16843B] font-en tabular-nums"
                         >
                           ({metrics.highestSaleAuction.saleRate.toFixed(1)}%)
                         </span>
@@ -535,22 +579,25 @@ export const ExecutiveAuctionPrintReport: React.FC<
                   )}
 
                   {metrics.lowestSaleAuction && (
-                    <div className="bg-[#FEF3F2] border border-[#FECDCA] rounded-[10px] px-3 py-2 flex items-center justify-between">
+                    <div className="bg-[#FEF3F2] border border-[#FECDCA] rounded-[10px] px-3 py-1.5 flex items-center justify-between">
                       <div className="flex items-center gap-2">
-                        <span className="w-6 h-6 rounded-md bg-[#C52B36] text-white flex items-center justify-center">
+                        <span className="w-6 h-6 rounded-md bg-[#C52B36] text-white flex items-center justify-center shrink-0">
                           <ArrowDownRight className="w-3.5 h-3.5" />
                         </span>
-                        <span className="text-[12.5px] font-extrabold text-[#14243D]">
+                        <span
+                          style={{ lineHeight: 1.5, letterSpacing: '0px' }}
+                          className="text-[12px] font-extrabold text-[#14243D]"
+                        >
                           {isAr ? 'أقل نسبة بيع' : 'Lowest Sale Rate'}
                         </span>
                       </div>
                       <div className="flex items-center gap-1.5">
-                        <span className="auction-id font-en text-[12.5px] font-black px-2.5 py-0.5 rounded bg-white text-[#123B70] border border-[#FCA5A5]">
+                        <span className="auction-id font-en text-[12px] font-black px-2.5 py-0.5 rounded bg-white text-[#123B70] border border-[#FCA5A5]">
                           {metrics.lowestSaleAuction.auctionNumber}
                         </span>
                         <span
                           dir="ltr"
-                          className="text-[13.5px] font-black text-[#C52B36] tabular-nums"
+                          className="text-[13px] font-black text-[#C52B36] font-en tabular-nums"
                         >
                           ({metrics.lowestSaleAuction.saleRate.toFixed(1)}%)
                         </span>
@@ -567,10 +614,13 @@ export const ExecutiveAuctionPrintReport: React.FC<
                     background:
                       'linear-gradient(135deg, #175A9C 0%, #123B70 100%)',
                   }}
-                  className="px-4 py-2.5 text-white flex items-center gap-2"
+                  className="px-4 py-2 text-white flex items-center gap-2"
                 >
-                  <PieChart className="w-4 h-4 text-[#D6A348]" />
-                  <h3 className="text-[14.5px] font-extrabold">
+                  <PieChart className="w-4 h-4 text-[#D6A348] shrink-0" />
+                  <h3
+                    style={{ lineHeight: 1.5, letterSpacing: '0px' }}
+                    className="text-[14px] font-extrabold m-0"
+                  >
                     {isAr
                       ? 'توزيع نتائج المزادات'
                       : 'Auction Results Distribution'}
@@ -579,9 +629,9 @@ export const ExecutiveAuctionPrintReport: React.FC<
 
                 <div
                   dir="ltr"
-                  className="flex items-center justify-around gap-3 px-4 py-3 my-auto"
+                  className="flex items-center justify-around gap-3 px-4 py-2 my-auto"
                 >
-                  <div className="relative w-[160px] h-[160px] shrink-0 flex items-center justify-center">
+                  <div className="relative w-[152px] h-[152px] shrink-0 flex items-center justify-center">
                     <svg viewBox="0 0 144 144" className="w-full h-full">
                       {!hasVehicles ? (
                         <circle
@@ -644,31 +694,37 @@ export const ExecutiveAuctionPrintReport: React.FC<
                         </>
                       )}
                     </svg>
-                    <div className="absolute inset-0 flex flex-col items-center justify-center text-center">
-                      <span className="text-[21px] font-black text-[#14243D] tabular-nums leading-none">
+                    <div
+                      dir={isAr ? 'rtl' : 'ltr'}
+                      className="absolute inset-0 flex flex-col items-center justify-center text-center"
+                    >
+                      <span className="text-[20px] font-black text-[#14243D] font-en tabular-nums">
                         {metrics.totalListed.toLocaleString('en-US')}
                       </span>
-                      <span className="text-[12px] font-extrabold text-[#64748B] mt-1">
+                      <span
+                        style={{ lineHeight: 1.4, letterSpacing: '0px' }}
+                        className="text-[11.5px] font-extrabold text-[#64748B]"
+                      >
                         {isAr ? 'مركبة مدرجة' : 'Vehicles'}
                       </span>
                     </div>
                   </div>
 
-                  <div dir={isAr ? 'rtl' : 'ltr'} className="space-y-3 flex-1">
+                  <div dir={isAr ? 'rtl' : 'ltr'} className="space-y-2.5 flex-1">
                     <div className="p-2.5 rounded-xl bg-[#F4F7FB] border border-[#CBD5E1]">
-                      <div className="flex items-center gap-1.5 text-[12.5px] font-extrabold text-[#14243D]">
-                        <span className="w-3 h-3 rounded-xs bg-[#175A9C]" />
-                        <span>
+                      <div className="flex items-center gap-1.5 text-[12px] font-extrabold text-[#14243D]">
+                        <span className="w-3 h-3 rounded-xs bg-[#175A9C] shrink-0" />
+                        <span style={{ lineHeight: 1.45, letterSpacing: '0px' }}>
                           {isAr ? 'المركبات المبيعة' : 'Sold Vehicles'}
                         </span>
                       </div>
                       <div className="flex items-baseline justify-between mt-1 ps-4">
-                        <span className="text-[16px] font-black tabular-nums text-[#14243D]">
+                        <span className="text-[15.5px] font-black font-en tabular-nums text-[#14243D]">
                           {metrics.totalSold.toLocaleString('en-US')}
                         </span>
                         <span
                           dir="ltr"
-                          className="text-[12.5px] font-black text-[#175A9C] tabular-nums"
+                          className="text-[12px] font-black text-[#175A9C] font-en tabular-nums"
                         >
                           ({metrics.overallSaleRate.toFixed(1)}%)
                         </span>
@@ -676,19 +732,19 @@ export const ExecutiveAuctionPrintReport: React.FC<
                     </div>
 
                     <div className="p-2.5 rounded-xl bg-[#FEF3F2] border border-[#FECDCA]">
-                      <div className="flex items-center gap-1.5 text-[12.5px] font-extrabold text-[#14243D]">
-                        <span className="w-3 h-3 rounded-xs bg-[#C52B36]" />
-                        <span>
+                      <div className="flex items-center gap-1.5 text-[12px] font-extrabold text-[#14243D]">
+                        <span className="w-3 h-3 rounded-xs bg-[#C52B36] shrink-0" />
+                        <span style={{ lineHeight: 1.45, letterSpacing: '0px' }}>
                           {isAr ? 'المركبات غير المبيعة' : 'Unsold Vehicles'}
                         </span>
                       </div>
                       <div className="flex items-baseline justify-between mt-1 ps-4">
-                        <span className="text-[16px] font-black tabular-nums text-[#C52B36]">
+                        <span className="text-[15.5px] font-black font-en tabular-nums text-[#C52B36]">
                           {metrics.totalUnsold.toLocaleString('en-US')}
                         </span>
                         <span
                           dir="ltr"
-                          className="text-[12.5px] font-black text-[#C52B36] tabular-nums"
+                          className="text-[12px] font-black text-[#C52B36] font-en tabular-nums"
                         >
                           ({metrics.overallUnsoldRate.toFixed(1)}%)
                         </span>
@@ -697,23 +753,26 @@ export const ExecutiveAuctionPrintReport: React.FC<
                   </div>
                 </div>
 
-                <div className="px-4 py-2.5 bg-[#F8FAFC] border-t border-[#E2E8F0]">
-                  <div className="flex items-center justify-between text-[12px] font-extrabold mb-1.5">
-                    <span className="text-[#64748B]">
+                <div className="px-4 py-2 bg-[#F8FAFC] border-t border-[#E2E8F0]">
+                  <div className="flex items-center justify-between text-[12px] font-extrabold mb-1">
+                    <span
+                      style={{ lineHeight: 1.45, letterSpacing: '0px' }}
+                      className="text-[#64748B]"
+                    >
                       {isAr
                         ? 'مؤشر كفاءة البيع الشهرية'
                         : 'Monthly Sale Efficiency'}
                     </span>
                     <span
                       dir="ltr"
-                      className="text-[#16843B] font-black tabular-nums"
+                      className="text-[#16843B] font-black font-en tabular-nums"
                     >
                       {metrics.overallSaleRate.toFixed(1)}%
                     </span>
                   </div>
                   <div
                     dir="ltr"
-                    className="w-full h-3 bg-[#E2E8F0] rounded-full overflow-hidden flex"
+                    className="w-full h-2.5 bg-[#E2E8F0] rounded-full overflow-hidden flex"
                   >
                     <div
                       style={{
@@ -740,17 +799,20 @@ export const ExecutiveAuctionPrintReport: React.FC<
                     background:
                       'linear-gradient(135deg, #175A9C 0%, #123B70 100%)',
                   }}
-                  className="px-4 py-2.5 text-white flex items-center gap-2"
+                  className="px-4 py-2 text-white flex items-center gap-2"
                 >
-                  <Gavel className="w-4 h-4 text-[#D6A348]" />
-                  <h3 className="text-[14.5px] font-extrabold">
+                  <Gavel className="w-4 h-4 text-[#D6A348] shrink-0" />
+                  <h3
+                    style={{ lineHeight: 1.5, letterSpacing: '0px' }}
+                    className="text-[14px] font-extrabold m-0"
+                  >
                     {isAr
-                      ? 'مزادات المركبات | Vehicle Auctions'
+                      ? 'ساحات مزادات المركبات'
                       : 'Vehicle Auctions Showcase'}
                   </h3>
                 </div>
 
-                <div className="relative flex-1 min-h-[190px] overflow-hidden bg-[#123B70]">
+                <div className="relative flex-1 min-h-[175px] overflow-hidden bg-[#123B70]">
                   <img
                     src={`${assetBase}assets/auction_yard_showcase.jpg`}
                     onError={(e) => {
@@ -767,26 +829,35 @@ export const ExecutiveAuctionPrintReport: React.FC<
                     }}
                     className="absolute inset-0"
                   />
-                  <div className="absolute bottom-3 inset-x-3.5 text-white">
-                    <div className="text-[14px] font-black">
+                  <div className="absolute bottom-2.5 inset-x-3.5 text-white">
+                    <div
+                      style={{ lineHeight: 1.5, letterSpacing: '0px' }}
+                      className="text-[13.5px] font-black"
+                    >
                       {isAr
-                        ? `ساحات مزادات شركة ساعد — ${monthNameAr} ${selectedPeriod.year}`
+                        ? `ساحات مزادات شركة ساعد — شهر ${monthNameAr} ${selectedPeriod.year}`
                         : `SAAED Official Auction Yards — ${monthNameEn} ${selectedPeriod.year}`}
                     </div>
-                    <div className="text-[11.5px] font-bold text-[#E2E8F0] mt-0.5">
+                    <div
+                      style={{ lineHeight: 1.45, letterSpacing: '0px' }}
+                      className="text-[11px] font-bold text-[#E2E8F0] mt-0.5"
+                    >
                       {isAr
-                        ? `تنظيم وإدارة مزادات المركبات وفق أعلى المعايير التشغيلية`
-                        : `Enterprise vehicle auction management & operational analytics`}
+                        ? 'تنظيم وإدارة مزادات المركبات وفق أعلى المعايير التشغيلية'
+                        : 'Enterprise vehicle auction management & operational analytics'}
                     </div>
                   </div>
                 </div>
 
-                <div className="px-4 py-2.5 bg-[#F8FAFC] border-t border-[#E2E8F0] grid grid-cols-2 gap-2 text-center">
-                  <div className="bg-white border border-[#E2E8F0] rounded-lg py-1.5 px-2">
-                    <div className="text-[11px] font-bold text-[#64748B]">
+                <div className="px-4 py-2 bg-[#F8FAFC] border-t border-[#E2E8F0] grid grid-cols-2 gap-2 text-center">
+                  <div className="bg-white border border-[#E2E8F0] rounded-lg py-1 px-2">
+                    <div
+                      style={{ lineHeight: 1.4, letterSpacing: '0px' }}
+                      className="text-[11px] font-bold text-[#64748B]"
+                    >
                       {isAr ? 'معدل المركبات لكل مزاد' : 'Avg Listed / Auction'}
                     </div>
-                    <div className="text-[15px] font-black text-[#123B70] tabular-nums">
+                    <div className="text-[14.5px] font-black text-[#123B70] font-en tabular-nums">
                       {metrics.totalAuctions > 0
                         ? Math.round(
                             metrics.totalListed / metrics.totalAuctions
@@ -794,11 +865,14 @@ export const ExecutiveAuctionPrintReport: React.FC<
                         : 0}
                     </div>
                   </div>
-                  <div className="bg-white border border-[#E2E8F0] rounded-lg py-1.5 px-2">
-                    <div className="text-[11px] font-bold text-[#64748B]">
+                  <div className="bg-white border border-[#E2E8F0] rounded-lg py-1 px-2">
+                    <div
+                      style={{ lineHeight: 1.4, letterSpacing: '0px' }}
+                      className="text-[11px] font-bold text-[#64748B]"
+                    >
                       {isAr ? 'معدل المبيعات لكل مزاد' : 'Avg Sold / Auction'}
                     </div>
-                    <div className="text-[15px] font-black text-[#16843B] tabular-nums">
+                    <div className="text-[14.5px] font-black text-[#16843B] font-en tabular-nums">
                       {metrics.avgSoldPerAuction.toLocaleString('en-US')}
                     </div>
                   </div>
@@ -840,70 +914,73 @@ export const ExecutiveAuctionPrintReport: React.FC<
                   className="px-4 py-2.5 text-white flex items-center justify-between"
                 >
                   <div className="flex items-center gap-2">
-                    <BarChart3 className="w-4 h-4 text-[#D6A348]" />
-                    <h3 className="text-[15px] font-extrabold">
+                    <BarChart3 className="w-4 h-4 text-[#D6A348] shrink-0" />
+                    <h3
+                      style={{ lineHeight: 1.5, letterSpacing: '0px' }}
+                      className="text-[14.5px] font-extrabold m-0"
+                    >
                       {isAr
                         ? 'مقارنة أداء المزادات (المدرجة / المبيعة / غير المبيعة)'
                         : 'Auction Performance Comparison (Listed / Sold / Unsold)'}
                     </h3>
                   </div>
-                  <span className="text-[11.5px] font-bold text-[#E2E8F0]">
-                    {monthNameAr} {selectedPeriod.year}
+                  <span
+                    style={{ lineHeight: 1.45, letterSpacing: '0px' }}
+                    className="text-[11.5px] font-bold text-[#E2BB70]"
+                  >
+                    {`${monthNameAr} ${selectedPeriod.year}`}
                   </span>
                 </div>
 
                 <div
                   dir="ltr"
-                  className="flex-1 flex flex-col justify-center px-5 py-4"
+                  className="relative flex-1 flex flex-col justify-center px-5 py-4"
                 >
-                  <svg
-                    viewBox="0 0 620 310"
-                    className="w-full h-full max-h-[410px] overflow-visible"
-                  >
-                    {/* Grid Lines */}
-                    {standardTicks.map((tick) => {
-                      const y = 260 - (tick / yAxisMax) * 220;
-                      return (
-                        <g key={tick}>
-                          <line
-                            x1="48"
-                            y1={y}
-                            x2="600"
-                            y2={y}
-                            stroke="#E2E8F0"
-                            strokeDasharray={tick === 0 ? undefined : '4 4'}
-                            strokeWidth="1"
-                          />
-                          <text
-                            x="40"
-                            y={y + 4}
-                            textAnchor="end"
-                            fill="#64748B"
-                            fontSize="11.5"
-                            fontWeight="800"
-                            className="font-en tabular-nums"
-                          >
-                            {tick}
-                          </text>
-                        </g>
-                      );
-                    })}
+                  {auctions.length === 0 ? (
+                    <div
+                      dir={isAr ? 'rtl' : 'ltr'}
+                      style={{ lineHeight: 1.5, letterSpacing: '0px' }}
+                      className="text-center text-[14px] font-extrabold text-[#64748B] py-12"
+                    >
+                      {isAr
+                        ? `لا توجد مزادات مسجلة لشهر ${monthNameAr} ${selectedPeriod.year}`
+                        : `No auctions recorded for ${monthNameEn} ${selectedPeriod.year}`}
+                    </div>
+                  ) : (
+                    <svg
+                      viewBox="0 0 620 310"
+                      className="w-full h-full max-h-[410px] overflow-visible"
+                    >
+                      {/* Grid Lines */}
+                      {standardTicks.map((tick) => {
+                        const y = 260 - (tick / yAxisMax) * 220;
+                        return (
+                          <g key={tick}>
+                            <line
+                              x1="48"
+                              y1={y}
+                              x2="600"
+                              y2={y}
+                              stroke="#E2E8F0"
+                              strokeDasharray={tick === 0 ? undefined : '4 4'}
+                              strokeWidth="1"
+                            />
+                            <text
+                              x="40"
+                              y={y + 4}
+                              textAnchor="end"
+                              fill="#64748B"
+                              fontSize="11.5"
+                              fontWeight="800"
+                              className="font-en tabular-nums"
+                            >
+                              {tick}
+                            </text>
+                          </g>
+                        );
+                      })}
 
-                    {auctions.length === 0 ? (
-                      <text
-                        x="324"
-                        y="150"
-                        textAnchor="middle"
-                        fill="#64748B"
-                        fontSize="14"
-                        fontWeight="800"
-                      >
-                        {isAr
-                          ? `لا توجد مزادات مسجلة لشهر ${monthNameAr} ${selectedPeriod.year}`
-                          : `No auctions recorded for ${monthNameEn} ${selectedPeriod.year}`}
-                      </text>
-                    ) : (
-                      auctions.slice(0, 12).map((auc, i) => {
+                      {auctions.slice(0, 12).map((auc, i) => {
                         const visibleList = auctions.slice(0, 12);
                         const count = Math.max(1, visibleList.length);
                         const slotWidth = 548 / count;
@@ -996,47 +1073,51 @@ export const ExecutiveAuctionPrintReport: React.FC<
                             </text>
                           </g>
                         );
-                      })
-                    )}
+                      })}
 
-                    <line
-                      x1="48"
-                      y1="260"
-                      x2="600"
-                      y2="260"
-                      stroke="#64748B"
-                      strokeWidth="1.5"
-                    />
-                  </svg>
+                      <line
+                        x1="48"
+                        y1="260"
+                        x2="600"
+                        y2="260"
+                        stroke="#64748B"
+                        strokeWidth="1.5"
+                      />
+                    </svg>
+                  )}
                 </div>
 
                 {/* Legend */}
                 <div
                   dir={isAr ? 'rtl' : 'ltr'}
+                  style={{ lineHeight: 1.5, letterSpacing: '0px' }}
                   className="px-4 py-3 bg-[#F8FAFC] border-t border-[#E2E8F0] flex items-center justify-center gap-6 text-[12.5px] font-extrabold text-[#14243D]"
                 >
                   <div className="flex items-center gap-2">
-                    <span className="w-3.5 h-3.5 rounded-xs bg-[#123B70]" />
+                    <span className="w-3.5 h-3.5 rounded-xs bg-[#123B70] shrink-0" />
                     <span>
-                      {isAr
-                        ? `المركبات المدرجة (${metrics.totalListed.toLocaleString('en-US')})`
-                        : `Listed Vehicles (${metrics.totalListed.toLocaleString('en-US')})`}
+                      {isAr ? 'المركبات المدرجة:' : 'Listed Vehicles:'}
+                    </span>
+                    <span className="font-en font-black text-[#123B70] tabular-nums">
+                      {metrics.totalListed.toLocaleString('en-US')}
                     </span>
                   </div>
                   <div className="flex items-center gap-2">
-                    <span className="w-3.5 h-3.5 rounded-xs bg-[#16843B]" />
+                    <span className="w-3.5 h-3.5 rounded-xs bg-[#16843B] shrink-0" />
                     <span>
-                      {isAr
-                        ? `المركبات المبيعة (${metrics.totalSold.toLocaleString('en-US')})`
-                        : `Sold Vehicles (${metrics.totalSold.toLocaleString('en-US')})`}
+                      {isAr ? 'المركبات المبيعة:' : 'Sold Vehicles:'}
+                    </span>
+                    <span className="font-en font-black text-[#16843B] tabular-nums">
+                      {metrics.totalSold.toLocaleString('en-US')}
                     </span>
                   </div>
                   <div className="flex items-center gap-2">
-                    <span className="w-3.5 h-3.5 rounded-xs bg-[#C52B36]" />
+                    <span className="w-3.5 h-3.5 rounded-xs bg-[#C52B36] shrink-0" />
                     <span>
-                      {isAr
-                        ? `المركبات غير المبيعة (${metrics.totalUnsold.toLocaleString('en-US')})`
-                        : `Unsold Vehicles (${metrics.totalUnsold.toLocaleString('en-US')})`}
+                      {isAr ? 'المركبات غير المبيعة:' : 'Unsold Vehicles:'}
+                    </span>
+                    <span className="font-en font-black text-[#C52B36] tabular-nums">
+                      {metrics.totalUnsold.toLocaleString('en-US')}
                     </span>
                   </div>
                 </div>
@@ -1052,10 +1133,13 @@ export const ExecutiveAuctionPrintReport: React.FC<
                   className="px-4 py-2.5 text-white flex items-center justify-between"
                 >
                   <div className="flex items-center gap-2">
-                    <TrendingUp className="w-4 h-4 text-[#D6A348]" />
-                    <h3 className="text-[15px] font-extrabold">
+                    <TrendingUp className="w-4 h-4 text-[#D6A348] shrink-0" />
+                    <h3
+                      style={{ lineHeight: 1.5, letterSpacing: '0px' }}
+                      className="text-[14.5px] font-extrabold m-0"
+                    >
                       {isAr
-                        ? 'نسبة نجاح البيع حسب المزاد (مرتبة تنازليًا)'
+                        ? 'نسبة نجاح البيع حسب المزاد (تنازليًا)'
                         : 'Sale Success Rate by Auction (Descending)'}
                     </h3>
                   </div>
@@ -1066,7 +1150,11 @@ export const ExecutiveAuctionPrintReport: React.FC<
                   className="flex-1 flex flex-col justify-center space-y-3.5 px-5 py-4"
                 >
                   {sortedBySaleRate.length === 0 ? (
-                    <div className="text-center text-sm font-bold text-[#64748B]">
+                    <div
+                      dir={isAr ? 'rtl' : 'ltr'}
+                      style={{ lineHeight: 1.5, letterSpacing: '0px' }}
+                      className="text-center text-sm font-bold text-[#64748B]"
+                    >
                       {isAr
                         ? `لا توجد مزادات مسجلة لشهر ${monthNameAr} ${selectedPeriod.year}`
                         : `No auctions recorded for ${monthNameEn} ${selectedPeriod.year}`}
@@ -1153,7 +1241,7 @@ export const ExecutiveAuctionPrintReport: React.FC<
           >
             {renderCompactHeader(
               dataTableChunks.length > 1
-                ? `جدول بيانات المزادات التفصيلي (${chunkIdx + 1} من ${dataTableChunks.length})`
+                ? `جدول بيانات المزادات التفصيلي — الجزء ${chunkIdx + 1} من ${dataTableChunks.length}`
                 : 'جدول بيانات المزادات التفصيلي',
               dataTableChunks.length > 1
                 ? `Detailed Auction Data Report (${chunkIdx + 1} of ${dataTableChunks.length})`
@@ -1168,6 +1256,8 @@ export const ExecutiveAuctionPrintReport: React.FC<
                     style={{
                       background:
                         'linear-gradient(180deg, #175A9C 0%, #123B70 100%)',
+                      lineHeight: 1.5,
+                      letterSpacing: '0px',
                     }}
                     className="text-white text-[12.5px] font-extrabold"
                   >
@@ -1200,7 +1290,10 @@ export const ExecutiveAuctionPrintReport: React.FC<
                     </th>
                   </tr>
                 </thead>
-                <tbody className="text-[12px] font-bold text-[#14243D]">
+                <tbody
+                  style={{ lineHeight: 1.55, letterSpacing: '0px' }}
+                  className="text-[12px] font-bold text-[#14243D]"
+                >
                   {chunk.length === 0 ? (
                     <tr>
                       <td
@@ -1231,22 +1324,22 @@ export const ExecutiveAuctionPrintReport: React.FC<
                         <td className="py-2.5 px-2.5 border border-[#CBD5E1] font-extrabold">
                           {isAr ? auc.durationAr : auc.durationEn}
                         </td>
-                        <td className="py-2.5 px-2 border border-[#CBD5E1] font-black tabular-nums text-[13px]">
+                        <td className="py-2.5 px-2 border border-[#CBD5E1] font-en font-black tabular-nums text-[13px]">
                           {auc.listedVehicles.toLocaleString('en-US')}
                         </td>
-                        <td className="py-2.5 px-2 border border-[#CBD5E1] font-black tabular-nums text-[13px] text-[#16843B]">
+                        <td className="py-2.5 px-2 border border-[#CBD5E1] font-en font-black tabular-nums text-[13px] text-[#16843B]">
                           {auc.soldVehicles.toLocaleString('en-US')}
                         </td>
-                        <td className="py-2.5 px-2 border border-[#CBD5E1] font-black tabular-nums text-[13px] text-[#C52B36]">
+                        <td className="py-2.5 px-2 border border-[#CBD5E1] font-en font-black tabular-nums text-[13px] text-[#C52B36]">
                           {auc.unsoldVehicles.toLocaleString('en-US')}
                         </td>
-                        <td className="py-2 px-3 border border-[#CBD5E1] text-right leading-relaxed whitespace-normal break-words">
+                        <td className="py-2 px-3 border border-[#CBD5E1] text-right whitespace-normal break-words">
                           {isAr ? auc.notesAr : auc.notesEn}
                         </td>
-                        <td className="py-2 px-3 border border-[#CBD5E1] text-right leading-relaxed whitespace-normal break-words">
+                        <td className="py-2 px-3 border border-[#CBD5E1] text-right whitespace-normal break-words">
                           {isAr ? auc.challengesAr : auc.challengesEn}
                         </td>
-                        <td className="py-2 px-3 border border-[#CBD5E1] text-right leading-relaxed whitespace-normal break-words">
+                        <td className="py-2 px-3 border border-[#CBD5E1] text-right whitespace-normal break-words">
                           {isAr
                             ? auc.recommendationsAr
                             : auc.recommendationsEn}
@@ -1257,29 +1350,44 @@ export const ExecutiveAuctionPrintReport: React.FC<
                 </tbody>
                 {isLastChunk && (
                   <tfoot>
-                    <tr className="bg-[#123B70] text-white font-black text-[13.5px]">
+                    <tr
+                      style={{ lineHeight: 1.5, letterSpacing: '0px' }}
+                      className="bg-[#123B70] text-white font-black text-[13.5px]"
+                    >
                       <td
                         colSpan={3}
                         className="py-2.5 px-4 border border-[#123B70] text-center"
                       >
                         {isAr ? 'الإجمالي العام للشهر' : 'Monthly Grand Total'}
                       </td>
-                      <td className="py-2.5 px-2 border border-[#24528A] bg-[#D6A348] text-[#14243D] tabular-nums text-[15px]">
+                      <td className="py-2.5 px-2 border border-[#24528A] bg-[#D6A348] text-[#14243D] font-en tabular-nums text-[15px]">
                         {metrics.totalListed.toLocaleString('en-US')}
                       </td>
-                      <td className="py-2.5 px-2 border border-[#24528A] bg-[#E5BA63] text-[#14243D] tabular-nums text-[15px]">
+                      <td className="py-2.5 px-2 border border-[#24528A] bg-[#E5BA63] text-[#14243D] font-en tabular-nums text-[15px]">
                         {metrics.totalSold.toLocaleString('en-US')}
                       </td>
-                      <td className="py-2.5 px-2 border border-[#24528A] bg-[#D6A348] text-[#14243D] tabular-nums text-[15px]">
+                      <td className="py-2.5 px-2 border border-[#24528A] bg-[#D6A348] text-[#14243D] font-en tabular-nums text-[15px]">
                         {metrics.totalUnsold.toLocaleString('en-US')}
                       </td>
                       <td
                         colSpan={3}
                         className="py-2.5 px-4 border border-[#123B70] text-center text-[12.5px] text-[#F8FAFC]"
                       >
-                        {isAr
-                          ? `نسبة البيع الإجمالية: ${metrics.overallSaleRate.toFixed(1)}% | نسبة عدم البيع: ${metrics.overallUnsoldRate.toFixed(1)}%`
-                          : `Overall Sale Rate: ${metrics.overallSaleRate.toFixed(1)}% | Unsold Rate: ${metrics.overallUnsoldRate.toFixed(1)}%`}
+                        <div className="flex items-center justify-center gap-4">
+                          <span>
+                            {isAr ? 'نسبة البيع الإجمالية:' : 'Overall Sale Rate:'}{' '}
+                            <strong dir="ltr" className="font-en text-[#86EFAC]">
+                              {metrics.overallSaleRate.toFixed(1)}%
+                            </strong>
+                          </span>
+                          <span>|</span>
+                          <span>
+                            {isAr ? 'نسبة عدم البيع:' : 'Unsold Rate:'}{' '}
+                            <strong dir="ltr" className="font-en text-[#FCA5A5]">
+                              {metrics.overallUnsoldRate.toFixed(1)}%
+                            </strong>
+                          </span>
+                        </div>
                       </td>
                     </tr>
                   </tfoot>
@@ -1326,21 +1434,30 @@ export const ExecutiveAuctionPrintReport: React.FC<
                   className="px-4 py-2 text-white flex items-center justify-between"
                 >
                   <div className="flex items-center gap-2">
-                    <FileCheck2 className="w-4 h-4 text-[#D6A348]" />
-                    <h3 className="text-[14px] font-extrabold">
+                    <FileCheck2 className="w-4 h-4 text-[#D6A348] shrink-0" />
+                    <h3
+                      style={{ lineHeight: 1.5, letterSpacing: '0px' }}
+                      className="text-[14px] font-extrabold m-0"
+                    >
                       {isAr
                         ? 'جدول التحليل المقارن لأداء المزادات'
                         : 'Comparative Auction Performance Table'}
                     </h3>
                   </div>
-                  <span className="text-[11.5px] font-bold text-[#E2E8F0]">
-                    {monthNameAr} {selectedPeriod.year}
+                  <span
+                    style={{ lineHeight: 1.45, letterSpacing: '0px' }}
+                    className="text-[11.5px] font-bold text-[#E2BB70]"
+                  >
+                    {`${monthNameAr} ${selectedPeriod.year}`}
                   </span>
                 </div>
 
                 <table className="report-table w-full border-collapse text-center text-[12px] font-bold">
                   <thead>
-                    <tr className="bg-[#123B70] text-white font-extrabold">
+                    <tr
+                      style={{ lineHeight: 1.5, letterSpacing: '0px' }}
+                      className="bg-[#123B70] text-white font-extrabold"
+                    >
                       <th className="py-2 px-3 border border-[#24528A]">
                         {isAr ? 'رقم المزاد' : 'Auction ID'}
                       </th>
@@ -1364,7 +1481,10 @@ export const ExecutiveAuctionPrintReport: React.FC<
                       </th>
                     </tr>
                   </thead>
-                  <tbody className="text-[#14243D]">
+                  <tbody
+                    style={{ lineHeight: 1.5, letterSpacing: '0px' }}
+                    className="text-[#14243D]"
+                  >
                     {compChunk.length === 0 ? (
                       <tr>
                         <td
@@ -1395,25 +1515,26 @@ export const ExecutiveAuctionPrintReport: React.FC<
                                 {auc.auctionNumber}
                               </span>
                             </td>
-                            <td className="py-1.5 px-3 border border-[#CBD5E1] tabular-nums font-extrabold">
+                            <td className="py-1.5 px-3 border border-[#CBD5E1] font-en tabular-nums font-extrabold">
                               {auc.listedVehicles.toLocaleString('en-US')}
                             </td>
-                            <td className="py-1.5 px-3 border border-[#CBD5E1] tabular-nums font-extrabold text-[#16843B]">
+                            <td className="py-1.5 px-3 border border-[#CBD5E1] font-en tabular-nums font-extrabold text-[#16843B]">
                               {auc.soldVehicles.toLocaleString('en-US')}
                             </td>
-                            <td className="py-1.5 px-3 border border-[#CBD5E1] tabular-nums font-extrabold text-[#C52B36]">
+                            <td className="py-1.5 px-3 border border-[#CBD5E1] font-en tabular-nums font-extrabold text-[#C52B36]">
                               {auc.unsoldVehicles.toLocaleString('en-US')}
                             </td>
-                            <td className="py-1.5 px-3 border border-[#CBD5E1] tabular-nums font-black text-[#16843B]">
+                            <td className="py-1.5 px-3 border border-[#CBD5E1] font-en tabular-nums font-black text-[#16843B]">
                               <span dir="ltr">{auc.saleRate.toFixed(1)}%</span>
                             </td>
-                            <td className="py-1.5 px-3 border border-[#CBD5E1] tabular-nums font-extrabold text-[#64748B]">
+                            <td className="py-1.5 px-3 border border-[#CBD5E1] font-en tabular-nums font-extrabold text-[#64748B]">
                               <span dir="ltr">
                                 {auc.unsoldRate.toFixed(1)}%
                               </span>
                             </td>
                             <td className="py-1.5 px-3 border border-[#CBD5E1]">
                               <span
+                                style={{ lineHeight: 1.4, letterSpacing: '0px' }}
                                 className={`inline-flex items-center justify-center px-3 py-0.5 rounded-full text-[11px] font-extrabold border ${badge.bgClass} ${badge.textClass} ${badge.borderClass}`}
                               >
                                 {badge.label}
@@ -1440,8 +1561,11 @@ export const ExecutiveAuctionPrintReport: React.FC<
                       className="px-3.5 py-2 text-white flex items-center justify-between gap-2"
                     >
                       <div className="flex items-center gap-2">
-                        <ClipboardCheck className="w-4 h-4 text-[#D6A348]" />
-                        <h3 className="text-[13.5px] font-extrabold">
+                        <ClipboardCheck className="w-4 h-4 text-[#D6A348] shrink-0" />
+                        <h3
+                          style={{ lineHeight: 1.5, letterSpacing: '0px' }}
+                          className="text-[13.5px] font-extrabold m-0"
+                        >
                           {isAr
                             ? 'أبرز الملاحظات التشغيلية'
                             : 'Key Operational Notes'}
@@ -1451,7 +1575,7 @@ export const ExecutiveAuctionPrintReport: React.FC<
                         src={`${assetBase}assets/operational_notes_inspection.jpg`}
                         alt=""
                         referrerPolicy="no-referrer"
-                        className="w-10 h-6 rounded object-cover border border-[#93C5FD]"
+                        className="w-10 h-6 rounded object-cover border border-[#93C5FD] shrink-0"
                       />
                     </div>
                     <ul className="p-3 divide-y divide-[#F1F5F9] flex-1">
@@ -1460,7 +1584,10 @@ export const ExecutiveAuctionPrintReport: React.FC<
                           key={auc.id}
                           className="py-1.5 first:pt-0 last:pb-0 flex items-start justify-between gap-2"
                         >
-                          <span className="text-[12px] font-bold text-[#14243D] leading-snug whitespace-normal break-words">
+                          <span
+                            style={{ lineHeight: 1.55, letterSpacing: '0px' }}
+                            className="text-[12px] font-bold text-[#14243D] whitespace-normal break-words"
+                          >
                             • {isAr ? auc.notesAr : auc.notesEn}
                           </span>
                           <span className="auction-id font-en text-[10.5px] font-black px-2 py-0.5 rounded bg-[#F0F5FA] text-[#175A9C] border border-[#CBD5E1]">
@@ -1481,8 +1608,11 @@ export const ExecutiveAuctionPrintReport: React.FC<
                       className="px-3.5 py-2 text-white flex items-center justify-between gap-2"
                     >
                       <div className="flex items-center gap-2">
-                        <AlertTriangle className="w-4 h-4 text-[#D6A348]" />
-                        <h3 className="text-[13.5px] font-extrabold">
+                        <AlertTriangle className="w-4 h-4 text-[#D6A348] shrink-0" />
+                        <h3
+                          style={{ lineHeight: 1.5, letterSpacing: '0px' }}
+                          className="text-[13.5px] font-extrabold m-0"
+                        >
                           {isAr
                             ? 'التحديات التشغيلية الرئيسية'
                             : 'Operational Challenges'}
@@ -1492,7 +1622,7 @@ export const ExecutiveAuctionPrintReport: React.FC<
                         src={`${assetBase}assets/operational_challenges_yard.jpg`}
                         alt=""
                         referrerPolicy="no-referrer"
-                        className="w-10 h-6 rounded object-cover border border-[#93C5FD]"
+                        className="w-10 h-6 rounded object-cover border border-[#93C5FD] shrink-0"
                       />
                     </div>
                     <ul className="p-3 divide-y divide-[#F1F5F9] flex-1">
@@ -1501,7 +1631,10 @@ export const ExecutiveAuctionPrintReport: React.FC<
                           key={auc.id}
                           className="py-1.5 first:pt-0 last:pb-0 flex items-start justify-between gap-2"
                         >
-                          <span className="text-[12px] font-bold text-[#14243D] leading-snug whitespace-normal break-words">
+                          <span
+                            style={{ lineHeight: 1.55, letterSpacing: '0px' }}
+                            className="text-[12px] font-bold text-[#14243D] whitespace-normal break-words"
+                          >
                             • {isAr ? auc.challengesAr : auc.challengesEn}
                           </span>
                           <span className="auction-id font-en text-[10.5px] font-black px-2 py-0.5 rounded bg-[#FEF3F2] text-[#C52B36] border border-[#FECDCA]">
@@ -1522,8 +1655,11 @@ export const ExecutiveAuctionPrintReport: React.FC<
                       className="px-3.5 py-2 text-white flex items-center justify-between gap-2"
                     >
                       <div className="flex items-center gap-2">
-                        <Lightbulb className="w-4 h-4 text-[#D6A348]" />
-                        <h3 className="text-[13.5px] font-extrabold">
+                        <Lightbulb className="w-4 h-4 text-[#D6A348] shrink-0" />
+                        <h3
+                          style={{ lineHeight: 1.5, letterSpacing: '0px' }}
+                          className="text-[13.5px] font-extrabold m-0"
+                        >
                           {isAr
                             ? 'التوصيات والإجراءات التحسينية'
                             : 'Recommendations & Actions'}
@@ -1533,7 +1669,7 @@ export const ExecutiveAuctionPrintReport: React.FC<
                         src={`${assetBase}assets/recommendations_excellence.jpg`}
                         alt=""
                         referrerPolicy="no-referrer"
-                        className="w-10 h-6 rounded object-cover border border-[#93C5FD]"
+                        className="w-10 h-6 rounded object-cover border border-[#93C5FD] shrink-0"
                       />
                     </div>
                     <ul className="p-3 divide-y divide-[#F1F5F9] flex-1">
@@ -1542,7 +1678,10 @@ export const ExecutiveAuctionPrintReport: React.FC<
                           key={auc.id}
                           className="py-1.5 first:pt-0 last:pb-0 flex items-start justify-between gap-2"
                         >
-                          <span className="text-[12px] font-bold text-[#14243D] leading-snug whitespace-normal break-words">
+                          <span
+                            style={{ lineHeight: 1.55, letterSpacing: '0px' }}
+                            className="text-[12px] font-bold text-[#14243D] whitespace-normal break-words"
+                          >
                             •{' '}
                             {isAr
                               ? auc.recommendationsAr
@@ -1578,7 +1717,7 @@ export const ExecutiveAuctionPrintReport: React.FC<
             >
               {renderCompactHeader(
                 opsChunks.length > 1
-                  ? `الملاحظات والتحديات والتوصيات التشغيلية (${oIdx + 1} من ${opsChunks.length})`
+                  ? `الملاحظات والتحديات والتوصيات التشغيلية — الجزء ${oIdx + 1} من ${opsChunks.length}`
                   : 'الملاحظات والتحديات والتوصيات التشغيلية',
                 opsChunks.length > 1
                   ? `Operational Notes, Challenges & Recommendations (${oIdx + 1} of ${opsChunks.length})`
@@ -1597,8 +1736,11 @@ export const ExecutiveAuctionPrintReport: React.FC<
                     className="px-4 py-2.5 text-white flex items-center justify-between gap-2"
                   >
                     <div className="flex items-center gap-2">
-                      <ClipboardCheck className="w-4 h-4 text-[#D6A348]" />
-                      <h3 className="text-[14px] font-extrabold">
+                      <ClipboardCheck className="w-4 h-4 text-[#D6A348] shrink-0" />
+                      <h3
+                        style={{ lineHeight: 1.5, letterSpacing: '0px' }}
+                        className="text-[14px] font-extrabold m-0"
+                      >
                         {isAr
                           ? 'أبرز الملاحظات التشغيلية'
                           : 'Key Operational Notes'}
@@ -1608,7 +1750,7 @@ export const ExecutiveAuctionPrintReport: React.FC<
                       src={`${assetBase}assets/operational_notes_inspection.jpg`}
                       alt=""
                       referrerPolicy="no-referrer"
-                      className="w-11 h-7 rounded object-cover border border-[#93C5FD]"
+                      className="w-11 h-7 rounded object-cover border border-[#93C5FD] shrink-0"
                     />
                   </div>
                   <ul className="p-3.5 divide-y divide-[#F1F5F9] flex-1">
@@ -1617,7 +1759,10 @@ export const ExecutiveAuctionPrintReport: React.FC<
                         key={auc.id}
                         className="py-2 first:pt-0 last:pb-0 flex items-start justify-between gap-2.5"
                       >
-                        <span className="text-[12.5px] font-bold text-[#14243D] leading-relaxed whitespace-normal break-words">
+                        <span
+                          style={{ lineHeight: 1.55, letterSpacing: '0px' }}
+                          className="text-[12.5px] font-bold text-[#14243D] whitespace-normal break-words"
+                        >
                           • {isAr ? auc.notesAr : auc.notesEn}
                         </span>
                         <span className="auction-id font-en text-[11px] font-black px-2 py-0.5 rounded bg-[#F0F5FA] text-[#175A9C] border border-[#CBD5E1]">
@@ -1638,8 +1783,11 @@ export const ExecutiveAuctionPrintReport: React.FC<
                     className="px-4 py-2.5 text-white flex items-center justify-between gap-2"
                   >
                     <div className="flex items-center gap-2">
-                      <AlertTriangle className="w-4 h-4 text-[#D6A348]" />
-                      <h3 className="text-[14px] font-extrabold">
+                      <AlertTriangle className="w-4 h-4 text-[#D6A348] shrink-0" />
+                      <h3
+                        style={{ lineHeight: 1.5, letterSpacing: '0px' }}
+                        className="text-[14px] font-extrabold m-0"
+                      >
                         {isAr
                           ? 'التحديات التشغيلية الرئيسية'
                           : 'Operational Challenges'}
@@ -1649,7 +1797,7 @@ export const ExecutiveAuctionPrintReport: React.FC<
                       src={`${assetBase}assets/operational_challenges_yard.jpg`}
                       alt=""
                       referrerPolicy="no-referrer"
-                      className="w-11 h-7 rounded object-cover border border-[#93C5FD]"
+                      className="w-11 h-7 rounded object-cover border border-[#93C5FD] shrink-0"
                     />
                   </div>
                   <ul className="p-3.5 divide-y divide-[#F1F5F9] flex-1">
@@ -1658,7 +1806,10 @@ export const ExecutiveAuctionPrintReport: React.FC<
                         key={auc.id}
                         className="py-2 first:pt-0 last:pb-0 flex items-start justify-between gap-2.5"
                       >
-                        <span className="text-[12.5px] font-bold text-[#14243D] leading-relaxed whitespace-normal break-words">
+                        <span
+                          style={{ lineHeight: 1.55, letterSpacing: '0px' }}
+                          className="text-[12.5px] font-bold text-[#14243D] whitespace-normal break-words"
+                        >
                           • {isAr ? auc.challengesAr : auc.challengesEn}
                         </span>
                         <span className="auction-id font-en text-[11px] font-black px-2 py-0.5 rounded bg-[#FEF3F2] text-[#C52B36] border border-[#FECDCA]">
@@ -1679,8 +1830,11 @@ export const ExecutiveAuctionPrintReport: React.FC<
                     className="px-4 py-2.5 text-white flex items-center justify-between gap-2"
                   >
                     <div className="flex items-center gap-2">
-                      <Lightbulb className="w-4 h-4 text-[#D6A348]" />
-                      <h3 className="text-[14px] font-extrabold">
+                      <Lightbulb className="w-4 h-4 text-[#D6A348] shrink-0" />
+                      <h3
+                        style={{ lineHeight: 1.5, letterSpacing: '0px' }}
+                        className="text-[14px] font-extrabold m-0"
+                      >
                         {isAr
                           ? 'التوصيات والإجراءات التحسينية'
                           : 'Recommendations & Actions'}
@@ -1690,7 +1844,7 @@ export const ExecutiveAuctionPrintReport: React.FC<
                       src={`${assetBase}assets/recommendations_excellence.jpg`}
                       alt=""
                       referrerPolicy="no-referrer"
-                      className="w-11 h-7 rounded object-cover border border-[#93C5FD]"
+                      className="w-11 h-7 rounded object-cover border border-[#93C5FD] shrink-0"
                     />
                   </div>
                   <ul className="p-3.5 divide-y divide-[#F1F5F9] flex-1">
@@ -1699,7 +1853,10 @@ export const ExecutiveAuctionPrintReport: React.FC<
                         key={auc.id}
                         className="py-2 first:pt-0 last:pb-0 flex items-start justify-between gap-2.5"
                       >
-                        <span className="text-[12.5px] font-bold text-[#14243D] leading-relaxed whitespace-normal break-words">
+                        <span
+                          style={{ lineHeight: 1.55, letterSpacing: '0px' }}
+                          className="text-[12.5px] font-bold text-[#14243D] whitespace-normal break-words"
+                        >
                           •{' '}
                           {isAr
                             ? auc.recommendationsAr
@@ -1776,7 +1933,7 @@ export const OfficialReportPreviewModal: React.FC<
             <Layers className="w-5 h-5 text-[#D6A348]" />
           </div>
           <div>
-            <h2 className="text-[15px] font-black text-white leading-tight">
+            <h2 className="text-[15px] font-black text-white leading-normal">
               {isAr
                 ? `معاينة التقرير التنفيذي الرسمي — شهر ${monthName} ${selectedPeriod.year}`
                 : `Official Executive Report Preview — ${monthName} ${selectedPeriod.year}`}

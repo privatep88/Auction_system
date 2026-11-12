@@ -24,20 +24,193 @@
   font-variant-numeric: tabular-nums;
 }
 
+/* ============================================================================
+   OFFICIAL REPORT DOCUMENT & SAFE ARABIC RTL TYPOGRAPHY (Preview, Print & PDF)
+   Scoped strictly to .report-document so interactive workspace UI is untouched
+   ============================================================================ */
 .report-document {
   direction: rtl;
-  unicode-bidi: isolate;
-  font-family: 'Cairo', -apple-system, BlinkMacSystemFont, sans-serif;
+  font-family: "Cairo", -apple-system, BlinkMacSystemFont, sans-serif !important;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: geometricPrecision;
+}
+
+.report-document,
+.report-document * {
+  letter-spacing: 0px !important;
+  text-shadow: none !important;
+  font-kerning: normal !important;
+}
+
+.report-document h1,
+.report-document h2,
+.report-document h3,
+.report-document h4,
+.report-document p,
+.report-document th,
+.report-document td,
+.report-document li,
+.report-document span {
+  letter-spacing: 0px !important;
+  text-shadow: none !important;
+  overflow-wrap: normal;
+  word-break: normal;
 }
 
 .auction-id,
 .auction-code {
-  direction: ltr;
+  direction: ltr !important;
   unicode-bidi: isolate;
-  white-space: nowrap;
+  white-space: nowrap !important;
   display: inline-flex;
   align-items: center;
   flex-shrink: 0;
+  letter-spacing: 0px !important;
+}
+
+/* Dedicated Official Print & PDF Header (Page 1)
+   RTL 3-Column Grid:
+   - Right (24%): SAAED Official Logo
+   - Center (1fr): Main Title (h1) + Subtitle (p)
+   - Left (34%): Original Vehicle Auction Yard & Gavel Photo */
+.report-document .pdf-report-header,
+.pdf-report-header {
+  display: grid !important;
+  grid-template-columns: 24% minmax(0, 1fr) 34%;
+  direction: rtl !important;
+  align-items: stretch;
+  width: 100%;
+  min-height: 36mm;
+  height: auto !important;
+  overflow: visible !important;
+  break-inside: avoid;
+  page-break-inside: avoid;
+  box-sizing: border-box;
+  background: #ffffff;
+}
+
+.report-document .pdf-header-logo,
+.pdf-header-logo {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 0;
+  padding: 3.5mm 4mm;
+  background: #ffffff;
+  border-left: 1px solid #cbd5e1;
+  box-sizing: border-box;
+}
+
+.report-document .pdf-header-logo img,
+.pdf-header-logo img {
+  max-width: 100%;
+  max-height: 24mm;
+  width: auto;
+  height: auto;
+  object-fit: contain;
+  display: block;
+}
+
+.report-document .pdf-header-title,
+.pdf-header-title {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-width: 0;
+  padding: 3.5mm 5mm;
+  background: #123b70;
+  color: #ffffff;
+  text-align: center;
+  direction: rtl !important;
+  overflow: visible !important;
+  box-sizing: border-box;
+}
+
+.report-document .pdf-header-title h1,
+.pdf-header-title h1 {
+  position: static !important;
+  display: block;
+  width: 100%;
+  margin: 0 0 2mm 0 !important;
+  padding: 0 !important;
+  font-family: "Cairo", sans-serif !important;
+  font-size: 19pt !important;
+  font-weight: 800 !important;
+  line-height: 1.55 !important;
+  letter-spacing: 0px !important;
+  white-space: normal !important;
+  overflow-wrap: normal !important;
+  word-break: normal !important;
+  text-align: center !important;
+  direction: rtl !important;
+  unicode-bidi: normal !important;
+  transform: none !important;
+  text-shadow: none !important;
+  color: #ffffff !important;
+  overflow: visible !important;
+}
+
+.report-document .pdf-header-title p,
+.pdf-header-title p {
+  position: static !important;
+  display: block;
+  width: 100%;
+  margin: 0 !important;
+  padding: 0 !important;
+  font-family: "Cairo", sans-serif !important;
+  font-size: 11.5pt !important;
+  font-weight: 700 !important;
+  line-height: 1.5 !important;
+  letter-spacing: 0px !important;
+  color: #e2bb70 !important;
+  text-align: center !important;
+  direction: rtl !important;
+  unicode-bidi: normal !important;
+  transform: none !important;
+  text-shadow: none !important;
+  overflow: visible !important;
+}
+
+.report-document .pdf-header-image,
+.pdf-header-image {
+  min-width: 0;
+  overflow: hidden;
+  background: #123b70;
+  border-right: 1px solid #24528a;
+  display: flex;
+  align-items: stretch;
+  box-sizing: border-box;
+}
+
+.report-document .pdf-header-image img,
+.pdf-header-image img {
+  width: 100%;
+  height: 100%;
+  max-height: 36mm;
+  object-fit: cover;
+  object-position: right center;
+  display: block;
+}
+
+/* Dedicated Compact Header for Pages 2..N */
+.report-document .pdf-compact-header,
+.pdf-compact-header {
+  display: grid !important;
+  grid-template-columns: 165px minmax(0, 1fr) 210px;
+  direction: rtl !important;
+  align-items: stretch;
+  width: 100%;
+  min-height: 16mm;
+  height: auto !important;
+  overflow: visible !important;
+  break-inside: avoid;
+  page-break-inside: avoid;
+  box-sizing: border-box;
+  background: #ffffff;
+  border: 1px solid #cbd5e1;
+  border-radius: 12px;
+  margin-bottom: 10px;
 }
 
 @media screen {
@@ -96,6 +269,94 @@
   .official-report-page:last-child {
     page-break-after: auto !important;
     break-after: auto !important;
+  }
+
+  .pdf-report-header {
+    display: grid !important;
+    grid-template-columns: 24% minmax(0, 1fr) 34%;
+    direction: rtl !important;
+    align-items: stretch;
+    width: 100%;
+    min-height: 36mm;
+    height: auto !important;
+    overflow: visible !important;
+    break-inside: avoid;
+    box-sizing: border-box;
+  }
+
+  .pdf-header-logo {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 0;
+    padding: 3.5mm 4mm;
+    background: white;
+  }
+
+  .pdf-header-logo img {
+    max-width: 100%;
+    max-height: 24mm;
+    width: auto;
+    height: auto;
+    object-fit: contain;
+  }
+
+  .pdf-header-title {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-width: 0;
+    padding: 3.5mm 5mm;
+    background: #123b70;
+    color: white;
+    text-align: center;
+    direction: rtl !important;
+    overflow: visible !important;
+  }
+
+  .pdf-header-title h1 {
+    position: static !important;
+    display: block;
+    width: 100%;
+    margin: 0 0 2mm 0 !important;
+    font-family: "Cairo", sans-serif !important;
+    font-size: 19pt !important;
+    font-weight: 800 !important;
+    line-height: 1.55 !important;
+    letter-spacing: 0px !important;
+    white-space: normal !important;
+    overflow-wrap: normal !important;
+    word-break: normal !important;
+    text-align: center !important;
+    direction: rtl !important;
+    transform: none !important;
+    text-shadow: none !important;
+  }
+
+  .pdf-header-title p {
+    margin: 0 !important;
+    font-family: "Cairo", sans-serif !important;
+    font-size: 11.5pt !important;
+    font-weight: 700 !important;
+    line-height: 1.5 !important;
+    letter-spacing: 0px !important;
+    color: #e2bb70 !important;
+    text-align: center !important;
+    direction: rtl !important;
+  }
+
+  .pdf-header-image {
+    min-width: 0;
+    overflow: hidden;
+  }
+
+  .pdf-header-image img {
+    width: 100%;
+    height: 100%;
+    max-height: 36mm;
+    object-fit: cover;
+    display: block;
   }
 
   .report-table thead {
