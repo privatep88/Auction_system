@@ -17,10 +17,11 @@ import {
   LayoutGrid,
   Table2,
   BarChart3,
-  CheckCircle2,
   Database,
   FileSearch,
 } from 'lucide-react';
+import { useNotification } from './context/NotificationContext';
+import { validateAuctionDraft } from './utils/auctionValidation';
 import {
   AuctionRecord,
   FirebaseConnectionConfig,
@@ -131,10 +132,19 @@ export default function App() {
   const [isExportingPdf, setIsExportingPdf] = useState<boolean>(false);
   const [previewModalOpen, setPreviewModalOpen] = useState<boolean>(false);
   const [paperSize, setPaperSize] = useState<PaperSizeOption>('a4');
-  const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [firebaseConnected, setFirebaseConnected] = useState<boolean>(false);
   const [firebaseConfig, setFirebaseConfig] =
     useState<FirebaseConnectionConfig | null>(() => getStoredFirebaseConfig());
+
+  const {
+    setLang: setNotifLang,
+    showToast,
+    updateToast,
+    dismissToast,
+    showSuccess,
+    showError,
+    confirmAction,
+  } = useNotification();
 
   const isAr = lang === 'ar';
   const currentMonthName = getMonthName(selectedPeriod.month, lang);
@@ -146,7 +156,8 @@ export default function App() {
   useEffect(() => {
     document.documentElement.dir = isAr ? 'rtl' : 'ltr';
     document.documentElement.lang = lang;
-  }, [lang, isAr]);
+    setNotifLang(lang);
+  }, [lang, isAr, setNotifLang]);
 
   // Apply period switch cleanly and synchronously load that month's archived data
   const executePeriodSwitch = useCallback(
@@ -177,10 +188,21 @@ export default function App() {
           setAuctions(records);
           setFirebaseConnected(syncedWithFirestore);
           refreshArchiveSummary();
+          if (!syncedWithFirestore) {
+            showToast({
+              variant: 'warning',
+              title: isAr
+                ? 'تم تحميل البيانات من الأرشيف المحلي'
+                : 'Loaded from Local Archive',
+              message: isAr
+                ? 'تعذر الاتصال السحابي مع Firestore لهذه الفترة؛ البيانات المحلية محفوظة وآمنة.'
+                : 'Could not reach Firestore for this period; local archive data is safely loaded.',
+            });
+          }
         });
       }
     },
-    [firebaseConnected, refreshArchiveSummary]
+    [firebaseConnected, refreshArchiveSummary, isAr, showToast]
   );
 
   const requestPeriodSwitch = useCallback(
@@ -233,7 +255,49 @@ export default function App() {
     setAuctions(loaded.auctions);
     setMetadata(loaded.metadata);
     setMigrationModalOpen(false);
-    showToast(isAr ? res.messageAr : res.messageEn);
+    if (res.success) {
+      showSuccess(
+        isAr ? 'تم اعتماد الترحيل وتصفير الأشهر الأخرى بنجاح' : 'Migration & Zeroing Completed',
+        isAr ? res.messageAr : res.messageEn
+      );
+    } else {
+      showError({
+        title: isAr ? 'تعذر إتمام ترحيل البيانات' : 'Migration Stopped',
+        message: isAr ? res.messageAr : res.messageEn,
+      });
+    }
+  };
+
+  const handleRequestApproveMigrationFromBanner = async () => {
+    await confirmAction({
+      title: isAr
+        ? 'تأكيد ترحيل أكتوبر إلى نوفمبر وتصفير بقية الأشهر'
+        : 'Confirm October -> November Migration & Zeroing',
+      message: isAr
+        ? 'سيتم اعتماد نقل مزادات أكتوبر 2026 إلى نوفمبر 2026 وتصفير أكتوبر وبقية الأشهر مع الاحتفاظ بالنسخة الاحتياطية الكاملة.'
+        : 'Approves copying October 2026 auctions into November 2026 and zeroing all other periods with a restorable backup.',
+      destructive: true,
+      confirmText: isAr ? 'تأكيد الترحيل والتصفير' : 'Confirm Migration & Zeroing',
+      cancelText: isAr ? 'إلغاء' : 'Cancel',
+      impactMeta: {
+        operationName: isAr
+          ? 'اعتماد الترحيل وتصفير الأشهر الأخرى'
+          : 'Approve Migration & Zero Other Months',
+        periodLabel: isAr
+          ? `الوجهة المحفوظة: نوفمبر 2026 · الأشهر المصفّرة: ${migrationSummary.periodsToZero.length} فترة`
+          : `Target: Nov 2026 · Zeroed periods: ${migrationSummary.periodsToZero.length}`,
+        affectedCountLabel: isAr
+          ? `${migrationSummary.sourceRecords.length} مزادات (${migrationSummary.totalListedToMigrate.toLocaleString('en-US')} مركبة)`
+          : `${migrationSummary.sourceRecords.length} auctions (${migrationSummary.totalListedToMigrate.toLocaleString('en-US')} vehicles)`,
+        impactDescription: isAr
+          ? 'تبقى بيانات نوفمبر 2026 كاملة وتُصفّر جميع الأشهر الأخرى مع توفر النسخة الاحتياطية.'
+          : 'November 2026 keeps full migrated records while other months reset cleanly.',
+        reversibilityLabel: isAr
+          ? 'يمكن استعادة النسخة الاحتياطية من نافذة سجل الترحيل في أي وقت.'
+          : 'Reversible anytime via the Migration & Backup dialog.',
+      },
+      onConfirm: () => handleApproveMigrationAndZero('replace'),
+    });
   };
 
   const handleRestorePreMigrationBackup = () => {
@@ -244,7 +308,17 @@ export default function App() {
     setAuctions(loaded.auctions);
     setMetadata(loaded.metadata);
     setMigrationModalOpen(false);
-    showToast(isAr ? res.messageAr : res.messageEn);
+    if (res.restored) {
+      showSuccess(
+        isAr ? 'تمت استعادة النسخة الاحتياطية بنجاح' : 'Backup Restored',
+        isAr ? res.messageAr : res.messageEn
+      );
+    } else {
+      showError({
+        title: isAr ? 'تعذر استعادة النسخة الاحتياطية' : 'Restore Failed',
+        message: isAr ? res.messageAr : res.messageEn,
+      });
+    }
   };
 
   useEffect(() => {
@@ -263,21 +337,15 @@ export default function App() {
     }
   }, []);
 
-  const showToast = (msg: string) => {
-    setToastMessage(msg);
-    setTimeout(() => {
-      setToastMessage((prev) => (prev === msg ? null : prev));
-    }, 3500);
-  };
-
   const metrics = useMemo(() => calculateMetrics(auctions), [auctions]);
 
   const handleUpdateMetadata = (newMeta: ReportMetadata) => {
     setMetadata(newMeta);
     savePeriodMetadata(selectedPeriod.year, selectedPeriod.month, newMeta);
-    showToast(
+    showSuccess(
+      isAr ? 'تم تحديث تواريخ التقرير بنجاح' : 'Report Dates Updated',
       isAr
-        ? `تم تحديث تواريخ تقرير شهر ${currentMonthName} ${selectedPeriod.year} وحفظها.`
+        ? `تم حفظ تواريخ تقرير شهر ${currentMonthName} ${selectedPeriod.year}.`
         : `Report dates for ${currentMonthName} ${selectedPeriod.year} updated.`
     );
   };
@@ -301,56 +369,53 @@ export default function App() {
     refreshArchiveSummary();
     setFormModalOpen(false);
     setEditingRecord(null);
-    await persistSingleAuctionToCloud(normalized);
-    showToast(
+    const cloudSynced = firebaseConnected
+      ? await persistSingleAuctionToCloud(normalized)
+      : true;
+
+    if (firebaseConnected && !cloudSynced) {
+      showToast({
+        variant: 'warning',
+        title: isAr
+          ? `تم حفظ المزاد (${normalized.auctionNumber}) محلياً فقط`
+          : `Saved (${normalized.auctionNumber}) Locally Only`,
+        message: isAr
+          ? 'تعذر المزامنة مع Firestore حالياً — تم حفظ السجل بأمان في المتصفح.'
+          : 'Could not sync to Firestore right now — record safely stored locally.',
+      });
+      return;
+    }
+
+    showSuccess(
       formModalMode === 'add'
         ? isAr
-          ? `تمت إضافة المزاد (${normalized.auctionNumber}) لشهر ${currentMonthName} ${selectedPeriod.year} وحفظه.`
-          : `Auction (${normalized.auctionNumber}) added to ${currentMonthName} ${selectedPeriod.year}.`
+          ? `تمت إضافة المزاد (${normalized.auctionNumber}) بنجاح`
+          : `Auction (${normalized.auctionNumber}) Added`
         : isAr
-        ? `تم حفظ تعديلات المزاد (${normalized.auctionNumber}) لشهر ${currentMonthName} ${selectedPeriod.year}.`
-        : `Auction (${normalized.auctionNumber}) updated in ${currentMonthName} ${selectedPeriod.year}.`
+        ? `تم حفظ تعديلات المزاد (${normalized.auctionNumber}) بنجاح`
+        : `Auction (${normalized.auctionNumber}) Updated`,
+      isAr
+        ? `شهر ${currentMonthName} ${selectedPeriod.year}`
+        : `${currentMonthName} ${selectedPeriod.year}`
     );
   };
 
   const handleInlineSaveAuction = (
     draft: AuctionRecord
   ): { ok: boolean; error?: string } => {
-    const cleanCode = draft.auctionNumber.trim().toUpperCase();
-    if (!cleanCode) {
+    const validation = validateAuctionDraft(draft, auctions, {
+      lang,
+      periodLabel: `${currentMonthName} ${selectedPeriod.year}`,
+      requireDuration: true,
+    });
+    if (!validation.valid) {
       return {
         ok: false,
-        error: isAr ? 'يرجى إدخال رقم المزاد.' : 'Auction number is required.',
-      };
-    }
-    const isDuplicate = auctions.some(
-      (a) => a.auctionNumber.toUpperCase() === cleanCode && a.id !== draft.id
-    );
-    if (isDuplicate) {
-      return {
-        ok: false,
-        error: isAr
-          ? `رقم المزاد (${cleanCode}) مكرر في شهر ${currentMonthName} ${selectedPeriod.year}. يمنع تكرار أرقام المزادات داخل الشهر نفسه.`
-          : `Duplicate auction number (${cleanCode}) in ${currentMonthName} ${selectedPeriod.year}.`,
-      };
-    }
-    if (draft.listedVehicles <= 0) {
-      return {
-        ok: false,
-        error: isAr
-          ? 'عدد المركبات المدرجة يجب أن يكون أكبر من صفر.'
-          : 'Listed vehicles must be greater than zero.',
-      };
-    }
-    if (draft.soldVehicles < 0 || draft.soldVehicles > draft.listedVehicles) {
-      return {
-        ok: false,
-        error: isAr
-          ? 'عدد المركبات المبيعة لا يمكن أن يتجاوز عدد المركبات المدرجة!'
-          : 'Sold vehicles cannot exceed listed vehicles!',
+        error: validation.summaryMessages[0] || (isAr ? 'بيانات غير صالحة' : 'Invalid data'),
       };
     }
 
+    const cleanCode = draft.auctionNumber.trim().toUpperCase();
     const normalized = normalizeAuctionRecord(
       {
         ...draft,
@@ -371,11 +436,24 @@ export default function App() {
     );
     setAuctions(saved);
     refreshArchiveSummary();
-    persistSingleAuctionToCloud(normalized);
-    showToast(
+    persistSingleAuctionToCloud(normalized).then((ok) => {
+      if (firebaseConnected && !ok) {
+        showToast({
+          variant: 'warning',
+          title: isAr ? 'تنبيه المزامنة السحابية' : 'Cloud Sync Notice',
+          message: isAr
+            ? `تم حفظ (${normalized.auctionNumber}) محلياً وتعذر إرساله إلى Firestore حالياً.`
+            : `Saved (${normalized.auctionNumber}) locally; Firestore sync failed.`,
+        });
+      }
+    });
+    showSuccess(
       isAr
-        ? `تم تحديث بيانات المزاد (${normalized.auctionNumber}) لشهر ${currentMonthName} ${selectedPeriod.year}.`
-        : `Auction (${normalized.auctionNumber}) updated.`
+        ? `تم تحديث بيانات المزاد (${normalized.auctionNumber}) بنجاح`
+        : `Auction (${normalized.auctionNumber}) Updated`,
+      isAr
+        ? `شهر ${currentMonthName} ${selectedPeriod.year}`
+        : `${currentMonthName} ${selectedPeriod.year}`
     );
     return { ok: true };
   };
@@ -390,11 +468,28 @@ export default function App() {
     setAuctions(saved);
     refreshArchiveSummary();
     setDeletingRecord(null);
-    await deleteSingleAuctionFromCloud(record);
-    showToast(
+    const cloudOk = firebaseConnected
+      ? await deleteSingleAuctionFromCloud(record)
+      : true;
+    if (firebaseConnected && !cloudOk) {
+      showToast({
+        variant: 'warning',
+        title: isAr
+          ? `تم حذف المزاد (${record.auctionNumber}) محلياً`
+          : `Deleted (${record.auctionNumber}) Locally`,
+        message: isAr
+          ? 'تعذر حذف السجل من Firestore حالياً، سيتم الحفاظ على النسخة المحلية المحدثة.'
+          : 'Could not remove record from Firestore right now.',
+      });
+      return;
+    }
+    showSuccess(
       isAr
-        ? `تم حذف المزاد (${record.auctionNumber}) من شهر ${currentMonthName} ${selectedPeriod.year}.`
-        : `Auction (${record.auctionNumber}) deleted from ${currentMonthName} ${selectedPeriod.year}.`
+        ? `تم حذف المزاد (${record.auctionNumber}) بنجاح`
+        : `Auction (${record.auctionNumber}) Deleted`,
+      isAr
+        ? `تم تحديث مؤشرات شهر ${currentMonthName} ${selectedPeriod.year} تلقائياً.`
+        : `Metrics updated for ${currentMonthName} ${selectedPeriod.year}.`
     );
   };
 
@@ -409,20 +504,36 @@ export default function App() {
     setAuctions(saved);
     refreshArchiveSummary();
     if (firebaseConnected) {
-      await syncPeriodWithCloud(
+      const syncRes = await syncPeriodWithCloud(
         selectedPeriod.year,
         selectedPeriod.month,
         saved
       );
+      if (!syncRes.syncedWithFirestore) {
+        showToast({
+          variant: 'warning',
+          title: isAr
+            ? `تم الحفظ محلياً لشهر ${currentMonthName} ${selectedPeriod.year}`
+            : `Saved Locally for ${currentMonthName} ${selectedPeriod.year}`,
+          message: isAr
+            ? 'تعذرت المزامنة مع Firebase Firestore، والبيانات محفوظة بأمان في المتصفح.'
+            : 'Firestore sync failed; records are safely archived locally.',
+        });
+        return;
+      }
+      showSuccess(
+        isAr ? 'تم حفظ البيانات ومزامنتها سحابياً' : 'Saved & Synced with Firestore',
+        isAr
+          ? `شهر ${currentMonthName} ${selectedPeriod.year} (${saved.length} سجل)`
+          : `${currentMonthName} ${selectedPeriod.year} (${saved.length} records)`
+      );
+      return;
     }
-    showToast(
-      firebaseConnected
-        ? isAr
-          ? `تم حفظ بيانات شهر ${currentMonthName} ${selectedPeriod.year} محلياً ومزامنتها مع Firebase Firestore.`
-          : `Saved ${currentMonthName} ${selectedPeriod.year} locally and synced with Firestore.`
-        : isAr
-        ? `تم حفظ وأرشفة سجلات شهر ${currentMonthName} ${selectedPeriod.year} بنجاح.`
-        : `Archived records for ${currentMonthName} ${selectedPeriod.year} saved.`
+    showSuccess(
+      isAr ? 'تم حفظ وأرشفة بيانات الشهر بنجاح' : 'Month Data Saved & Archived',
+      isAr
+        ? `شهر ${currentMonthName} ${selectedPeriod.year} (${saved.length} سجل)`
+        : `${currentMonthName} ${selectedPeriod.year} (${saved.length} records)`
     );
   };
 
@@ -431,14 +542,23 @@ export default function App() {
     setAuctions([...reloaded.auctions]);
     setMetadata({ ...reloaded.metadata });
     refreshArchiveSummary();
-    showToast(
-      isAr
-        ? `تم تحديث تقرير شهر ${currentMonthName} ${selectedPeriod.year} وإعادة حساب المؤشرات.`
-        : `Refreshed report for ${currentMonthName} ${selectedPeriod.year}.`
-    );
+    showToast({
+      variant: 'info',
+      title: isAr ? 'تم تحديث التقرير وإعادة حساب المؤشرات' : 'Report Refreshed',
+      message: isAr
+        ? `شهر ${currentMonthName} ${selectedPeriod.year}`
+        : `${currentMonthName} ${selectedPeriod.year}`,
+    });
   };
 
   const handleExportExcel = async () => {
+    const toastId = showToast({
+      variant: 'loading',
+      title: isAr ? 'جارٍ تجهيز ملف Excel...' : 'Preparing Excel Workbook...',
+      message: isAr
+        ? `تقرير شهر ${currentMonthName} ${selectedPeriod.year}`
+        : `${currentMonthName} ${selectedPeriod.year} Report`,
+    });
     try {
       setIsExportingExcel(true);
       const exportedFileName = await exportExecutiveExcelReport({
@@ -449,24 +569,41 @@ export default function App() {
         thresholds,
         lang,
       });
-      showToast(
-        isAr
-          ? `تم تصدير ملف ${exportedFileName} لشهر ${currentMonthName} ${selectedPeriod.year}.`
-          : `Exported ${exportedFileName} for ${currentMonthName} ${selectedPeriod.year}.`
-      );
+      updateToast(toastId, {
+        variant: 'success',
+        title: isAr ? 'تم تصدير ملف Excel بنجاح' : 'Excel File Exported Successfully',
+        message: exportedFileName,
+      });
     } catch (err) {
       console.error('Excel export failed:', err);
-      showToast(
-        isAr
-          ? 'حدث خطأ أثناء تصدير ملف Excel.'
-          : 'Failed to export Excel report.'
-      );
+      dismissToast(toastId);
+      showError({
+        title: isAr ? 'تعذر تصدير ملف Excel' : 'Unable to Export Excel File',
+        message: isAr
+          ? 'حدث خطأ أثناء إنشاء أو تنزيل مصنف Excel للتقرير التنفيذي.'
+          : 'An error occurred while building or downloading the Excel workbook.',
+        details: [
+          err instanceof Error && err.message
+            ? err.message
+            : isAr
+            ? 'تعذر قراءة أو تجهيز موارد التقرير في المتصفح.'
+            : 'Unable to prepare report workbook assets.',
+        ],
+        confirmText: isAr ? 'حسناً' : 'OK',
+      });
     } finally {
       setIsExportingExcel(false);
     }
   };
 
   const handleExportPdf = async () => {
+    const toastId = showToast({
+      variant: 'loading',
+      title: isAr ? 'جارٍ تجهيز التقرير...' : 'Preparing Report...',
+      message: isAr
+        ? `شهر ${currentMonthName} ${selectedPeriod.year}`
+        : `${currentMonthName} ${selectedPeriod.year}`,
+    });
     try {
       setIsExportingPdf(true);
       const exportedFileName = await exportExecutivePdfReport({
@@ -477,12 +614,23 @@ export default function App() {
         selectedPeriod,
         lang,
         paperSize,
+        onProgress: (stage) => {
+          if (stage === 'building' || stage === 'downloading') {
+            updateToast(toastId, {
+              variant: 'loading',
+              title: isAr ? 'جارٍ إنشاء ملف PDF...' : 'Generating PDF File...',
+              message: isAr
+                ? 'تجهيز الرسوم البيانية والخطوط العربية...'
+                : 'Rendering charts and Arabic typography...',
+            });
+          }
+        },
       });
-      showToast(
-        isAr
-          ? `تم تصدير التقرير الرسمي (${exportedFileName}) لشهر ${currentMonthName} ${selectedPeriod.year} بنجاح.`
-          : `Exported official report (${exportedFileName}) for ${currentMonthName} ${selectedPeriod.year}.`
-      );
+      updateToast(toastId, {
+        variant: 'success',
+        title: isAr ? 'تم تجهيز ملف PDF بنجاح' : 'PDF File Ready & Exported',
+        message: `${exportedFileName} — ${currentMonthName} ${selectedPeriod.year}`,
+      });
     } catch (error) {
       console.error('PDF_EXPORT_FAILED:', {
         message: error instanceof Error ? error.message : String(error),
@@ -490,18 +638,56 @@ export default function App() {
         selectedPeriod,
         paperSize,
       });
-      showToast(
-        isAr
-          ? 'تعذر إنشاء ملف PDF. يرجى إعادة المحاولة.'
-          : 'Unable to generate PDF file. Please try again.'
-      );
+      dismissToast(toastId);
+      showError({
+        title: isAr ? 'تعذر تصدير ملف PDF' : 'Unable to Export PDF File',
+        message: isAr
+          ? 'تعذر إنشاء ملف PDF الرسمي للتقرير في الوقت الحالي.'
+          : 'Unable to generate the official PDF report at this time.',
+        details: [
+          error instanceof Error && error.message
+            ? error.message
+            : isAr
+            ? 'خطأ غير متوقع أثناء تجميع الصفحات أو تحميل الخطوط والصور.'
+            : 'Unexpected error during page assembly or asset loading.',
+        ],
+        hint: isAr
+          ? 'يمكنك المحاولة مرة أخرى أو استخدام زر "معاينة التقرير" ثم "طباعة التقرير" لحفظه كـ PDF من المتصفح.'
+          : 'Please try again or use Preview -> Print Report to save via the browser print dialog.',
+        confirmText: isAr ? 'حسناً' : 'OK',
+      });
     } finally {
       setIsExportingPdf(false);
     }
   };
 
   const handlePrint = async () => {
-    await triggerOfficialReportPrint(paperSize);
+    try {
+      await triggerOfficialReportPrint(paperSize);
+      showToast({
+        variant: 'info',
+        title: isAr ? 'تم فتح معاينة الطباعة' : 'Print Preview Opened',
+        message: isAr
+          ? `تأكد من اختيار حجم الورق (${paperSize.toUpperCase()} Landscape) في نافذة الطباعة.`
+          : `Ensure (${paperSize.toUpperCase()} Landscape) is selected in the browser print dialog.`,
+      });
+    } catch (error) {
+      console.error('Print preview failed:', error);
+      showError({
+        title: isAr ? 'تعذر فتح معاينة الطباعة' : 'Unable to Open Print Preview',
+        message: isAr
+          ? 'لم يتمكن المتصفح من فتح نافذة الطباعة الرسمية للتقرير.'
+          : 'The browser could not open the official print dialog.',
+        details: [
+          error instanceof Error && error.message
+            ? error.message
+            : isAr
+            ? 'تحقق من إعدادات المتصفح أو عدم حظر النوافذ الخاصة بالطباعة.'
+            : 'Check browser print permissions or iframe blocking.',
+        ],
+        confirmText: isAr ? 'حسناً' : 'OK',
+      });
+    }
   };
 
   return (
@@ -731,14 +917,6 @@ export default function App() {
         </div>
       </header>
 
-      {/* Toast Notification */}
-      {toastMessage && (
-        <div className="no-print fixed bottom-4 end-4 z-50 bg-[#0E2E58] text-white border border-[#D5A03D] px-4 py-2.5 rounded-xl shadow-xl flex items-center gap-2 text-xs sm:text-sm font-bold animate-fade-in">
-          <CheckCircle2 className="w-4 h-4 text-[#4ADE80] shrink-0" />
-          <span>{toastMessage}</span>
-        </div>
-      )}
-
       {/* MAIN EXECUTIVE WORKSPACE CANVAS (1536px Reference Max-Width Container) */}
       <main className="flex-1 w-full max-w-[1540px] mx-auto px-2 sm:px-3 py-2.5 space-y-3">
         {/* PRE-ZEROING MIGRATION SUMMARY & EXPLICIT USER APPROVAL BANNER */}
@@ -767,7 +945,7 @@ export default function App() {
                 </button>
                 <button
                   type="button"
-                  onClick={() => handleApproveMigrationAndZero('replace')}
+                  onClick={handleRequestApproveMigrationFromBanner}
                   className="px-3.5 py-1.5 text-xs font-extrabold text-white bg-[#16843B] hover:bg-[#126E30] rounded-lg shadow-2xs cursor-pointer whitespace-nowrap"
                 >
                   {isAr
@@ -896,24 +1074,42 @@ export default function App() {
         onSaveThresholds={(newT) => {
           setThresholds(newT);
           saveThresholds(newT);
-          showToast(
+          showSuccess(
+            isAr ? 'تم تحديث حدود تقييم الأداء بنجاح' : 'Rating Thresholds Updated',
             isAr
-              ? 'تم تحديث حدود تقييم الأداء بنجاح.'
-              : 'Performance rating thresholds updated.'
+              ? 'تم تطبيق معايير التقييم الجديدة على التقرير ولوحة التحليل.'
+              : 'Updated thresholds applied to reports and dashboard.'
           );
         }}
         onSaveFirebase={(cfg) => {
           setFirebaseConfig(cfg);
           const res = saveFirebaseConfig(cfg);
           setFirebaseConnected(res.connected);
+          if (cfg && !res.connected) {
+            showError({
+              title: isAr ? 'تعذر الاتصال بـ Firebase Firestore' : 'Firebase Connection Failed',
+              message: isAr
+                ? 'بيانات الربط السحابي المدخلة لم تنجح في إنشاء اتصال بـ Firestore، وسيستمر حفظ البيانات محلياً في المتصفح.'
+                : 'The provided Firebase settings failed to connect to Firestore; data remains stored locally.',
+            });
+            return;
+          }
           if (res.connected) {
             syncPeriodWithCloud(
               selectedPeriod.year,
               selectedPeriod.month,
               auctions
-            ).then(({ records }) => {
+            ).then(({ records, syncedWithFirestore }) => {
               setAuctions(records);
               refreshArchiveSummary();
+              if (syncedWithFirestore) {
+                showSuccess(
+                  isAr ? 'تم تفعيل الربط والمزامنة مع Firestore' : 'Firestore Sync Active',
+                  isAr
+                    ? `المشروع المتصل: ${res.projectId || ''}`
+                    : `Connected project: ${res.projectId || ''}`
+                );
+              }
             });
           }
         }}
@@ -922,10 +1118,13 @@ export default function App() {
           executePeriodSwitch(2026, 11);
           setThresholds(def.thresholds);
           setMigrationSummary(getOctToNovMigrationSummary());
-          showToast(
+          showSuccess(
             isAr
-              ? 'تمت استعادة البيانات المنقولة لشهر نوفمبر 2026 (دون المساس بالأشهر الأخرى).'
-              : 'Restored November 2026 migrated data (other months preserved).'
+              ? 'تمت استعادة بيانات نوفمبر 2026 المنقولة'
+              : 'November 2026 Reference Data Restored',
+            isAr
+              ? 'تم الحفاظ على بيانات كافة الأشهر والسنوات الأخرى دون تغيير.'
+              : 'All other months and years were preserved unchanged.'
           );
         }}
       />

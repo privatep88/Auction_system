@@ -662,8 +662,14 @@ export async function triggerOfficialReportPrint(
   try {
     printIframe.contentWindow.focus();
     printIframe.contentWindow.print();
-  } catch {
-    window.print();
+  } catch (iframeErr) {
+    try {
+      window.print();
+    } catch {
+      throw iframeErr instanceof Error
+        ? iframeErr
+        : new Error('Unable to open browser print preview.');
+    }
   }
 }
 
@@ -675,6 +681,7 @@ export interface ExecutivePdfBuildParams {
   selectedPeriod: ReportingPeriod;
   lang: Language;
   paperSize?: PaperSizeOption;
+  onProgress?: (stage: 'preparing' | 'building' | 'downloading') => void;
 }
 
 /**
@@ -3131,6 +3138,7 @@ export async function exportExecutivePdfReport(
     const paddedMonth = String(selectedPeriod.month).padStart(2, '0');
     const fileName = `SAAED_Auction_Report_${selectedPeriod.year}_${paddedMonth}.pdf`;
 
+    params.onProgress?.('preparing');
     if (typeof document !== 'undefined') {
       currentStage = 'STAGE_2_DOM_MOUNT_AND_HEADER_VERIFY';
       const printMount = document.getElementById('saaed-official-print-mount');
@@ -3143,9 +3151,11 @@ export async function exportExecutivePdfReport(
     await getLoadedReportAssets();
 
     currentStage = 'STAGE_6_PDF_ASSEMBLY';
+    params.onProgress?.('building');
     const pdf = await buildExecutivePdfDocument(params);
 
     currentStage = 'STAGE_7_FILE_DOWNLOAD';
+    params.onProgress?.('downloading');
     try {
       pdf.save(fileName);
     } catch {

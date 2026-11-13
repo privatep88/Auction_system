@@ -31,6 +31,12 @@ import {
   ExcelSheetIcon,
 } from './CustomIcons';
 import { ReportingPeriodBar } from './ReportingPeriodBar';
+import { useNotification } from '../context/NotificationContext';
+import {
+  AuctionFieldKey,
+  validateAuctionDraft,
+  validateReportMetadataDates,
+} from '../utils/auctionValidation';
 
 interface AuctionDataReportProps {
   auctions: AuctionRecord[];
@@ -93,23 +99,60 @@ export const AuctionDataReport: React.FC<AuctionDataReportProps> = ({
   const monthNameEn = getMonthName(selectedPeriod.month, 'en');
   const currentMonthLabel = isAr ? monthNameAr : monthNameEn;
 
+  const { showError, confirmAction } = useNotification();
   const [searchQuery, setSearchQuery] = useState('');
   const [sortField, setSortField] = useState<SortField>('index');
   const [sortAsc, setSortAsc] = useState<boolean>(true);
   const [editingDateField, setEditingDateField] = useState<
     'reportDate' | 'periodStart' | 'periodEnd' | null
   >(null);
+  const [dateDraft, setDateDraft] = useState<string>('');
   const [inlineEditId, setInlineEditId] = useState<string | null>(null);
   const [inlineDraft, setInlineDraft] = useState<AuctionRecord | null>(null);
-  const [inlineError, setInlineError] = useState<string | null>(null);
+  const [inlineListedRaw, setInlineListedRaw] = useState<string>('');
+  const [inlineSoldRaw, setInlineSoldRaw] = useState<string>('');
+  const [inlineSubmitted, setInlineSubmitted] = useState<boolean>(false);
 
   // Reset inline edit state when selectedPeriod changes
   useEffect(() => {
     setInlineEditId(null);
     setInlineDraft(null);
-    setInlineError(null);
+    setInlineListedRaw('');
+    setInlineSoldRaw('');
+    setInlineSubmitted(false);
+    setEditingDateField(null);
     onInlineDirtyChange?.(false);
   }, [selectedPeriod.year, selectedPeriod.month]);
+
+  const startDateEdit = (field: 'reportDate' | 'periodStart' | 'periodEnd') => {
+    setEditingDateField(field);
+    setDateDraft(metadata[field]);
+  };
+
+  const commitDateEdit = (
+    field: 'reportDate' | 'periodStart' | 'periodEnd',
+    nextVal: string
+  ) => {
+    setEditingDateField(null);
+    if (nextVal === metadata[field]) return;
+    const candidate: ReportMetadata = {
+      ...metadata,
+      [field]: nextVal,
+    };
+    const dateCheck = validateReportMetadataDates(candidate, lang);
+    if (!dateCheck.valid) {
+      showError({
+        title: isAr ? 'تعذر تحديث تاريخ التقرير' : 'Invalid Report Date',
+        message: isAr
+          ? 'تاريخ الفترة المدخل غير صالح:'
+          : 'The entered report period date is invalid:',
+        details: dateCheck.summaryMessages,
+        confirmText: isAr ? 'العودة للتصحيح' : 'Return & Fix',
+      });
+      return;
+    }
+    onUpdateMetadata(candidate);
+  };
 
   const handleSort = (field: SortField) => {
     if (sortField === field) {
@@ -152,30 +195,101 @@ export const AuctionDataReport: React.FC<AuctionDataReportProps> = ({
       return sortAsc ? cmp : -cmp;
     });
 
-  const startInlineEdit = (rec: AuctionRecord) => {
+  const applyStartInlineEdit = (rec: AuctionRecord) => {
     setInlineEditId(rec.id);
     setInlineDraft({ ...rec });
-    setInlineError(null);
+    setInlineListedRaw(String(rec.listedVehicles));
+    setInlineSoldRaw(String(rec.soldVehicles));
+    setInlineSubmitted(false);
     onInlineDirtyChange?.(true);
+  };
+
+  const startInlineEdit = async (rec: AuctionRecord) => {
+    if (inlineEditId === rec.id) return;
+    if (inlineEditId && inlineDraft) {
+      const confirmed = await confirmAction({
+        title: isAr
+          ? 'تعديلات غير محفوظة في الصف الحالي'
+          : 'Unsaved Changes in Current Row',
+        message: isAr
+          ? `أنت تقوم حالياً بتعديل المزاد (${inlineDraft.auctionNumber}). هل ترغب في تجاهل تعديلات هذا الصف وبدء تعديل (${rec.auctionNumber})؟`
+          : `You are currently editing (${inlineDraft.auctionNumber}). Discard those edits and edit (${rec.auctionNumber}) instead?`,
+        confirmText: isAr ? 'تجاهل والانتقال للصف' : 'Discard & Switch Row',
+        cancelText: isAr ? 'البقاء في الصف الحالي' : 'Stay on Current Row',
+        destructive: false,
+      });
+      if (!confirmed) return;
+    }
+    applyStartInlineEdit(rec);
   };
 
   const cancelInlineEdit = () => {
     setInlineEditId(null);
     setInlineDraft(null);
-    setInlineError(null);
+    setInlineListedRaw('');
+    setInlineSoldRaw('');
+    setInlineSubmitted(false);
     onInlineDirtyChange?.(false);
   };
 
+  const inlineValidation = inlineDraft
+    ? validateAuctionDraft(
+        {
+          id: inlineDraft.id,
+          auctionNumber: inlineDraft.auctionNumber,
+          durationAr: inlineDraft.durationAr,
+          durationEn: inlineDraft.durationEn,
+          listedVehicles: inlineListedRaw,
+          soldVehicles: inlineSoldRaw,
+        },
+        auctions,
+        {
+          lang,
+          periodLabel: `${currentMonthLabel} ${selectedPeriod.year}`,
+          requireDuration: true,
+        }
+      )
+    : null;
+
   const saveInlineEdit = () => {
-    if (!inlineDraft) return;
-    const res = onInlineSaveAuction(inlineDraft);
+    if (!inlineDraft || !inlineValidation) return;
+    setInlineSubmitted(true);
+
+    if (!inlineValidation.valid) {
+      showError({
+        title: isAr
+          ? `تعذر حفظ تعديلات المزاد (${inlineDraft.auctionNumber || '—'})`
+          : `Unable to Save Row (${inlineDraft.auctionNumber || '—'})`,
+        message: isAr
+          ? 'يرجى تصحيح القيم المظللة باللون الأحمر في الصف قبل الحفظ:'
+          : 'Please correct the highlighted values in the row before saving:',
+        details: inlineValidation.summaryMessages,
+        hint: isAr
+          ? 'تبقى القيم التي أدخلتها مفتوحة في الجدول حتى تقوم بتصحيحها أو إلغائها.'
+          : 'Your entered values remain open in the table until corrected or cancelled.',
+        confirmText: isAr ? 'العودة للتصحيح' : 'Return & Fix',
+      });
+      return;
+    }
+
+    const res = onInlineSaveAuction({
+      ...inlineDraft,
+      listedVehicles: Number(inlineListedRaw),
+      soldVehicles: Number(inlineSoldRaw),
+    });
     if (!res.ok) {
-      setInlineError(res.error || (isAr ? 'بيانات غير صالحة' : 'Invalid data'));
+      showError({
+        title: isAr ? 'تعذر حفظ تعديلات الصف' : 'Unable to Save Row Edits',
+        message: res.error || (isAr ? 'بيانات غير صالحة' : 'Invalid data'),
+        confirmText: isAr ? 'العودة للتصحيح' : 'Return & Fix',
+      });
       return;
     }
     setInlineEditId(null);
     setInlineDraft(null);
-    setInlineError(null);
+    setInlineListedRaw('');
+    setInlineSoldRaw('');
+    setInlineSubmitted(false);
     onInlineDirtyChange?.(false);
   };
 
@@ -258,18 +372,23 @@ export const AuctionDataReport: React.FC<AuctionDataReportProps> = ({
                 {editingDateField === 'reportDate' ? (
                   <input
                     type="date"
-                    value={metadata.reportDate}
-                    onChange={(e) =>
-                      onUpdateMetadata({ ...metadata, reportDate: e.target.value })
-                    }
-                    onBlur={() => setEditingDateField(null)}
+                    value={dateDraft}
+                    onChange={(e) => setDateDraft(e.target.value)}
+                    onBlur={() => commitDateEdit('reportDate', dateDraft)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        commitDateEdit('reportDate', dateDraft);
+                      } else if (e.key === 'Escape') {
+                        setEditingDateField(null);
+                      }
+                    }}
                     autoFocus
                     className="bg-slate-50 border border-[#165B9D] rounded px-1.5 py-0 text-xs font-mono tabular-nums text-[#123B70] focus:outline-none"
                   />
                 ) : (
                   <button
                     type="button"
-                    onClick={() => setEditingDateField('reportDate')}
+                    onClick={() => startDateEdit('reportDate')}
                     title={isAr ? 'انقر لتعديل تاريخ التقرير' : 'Click to edit report date'}
                     className="font-mono tabular-nums font-bold text-[#0F294A] hover:text-[#165B9D] cursor-pointer transition-colors"
                   >
@@ -287,18 +406,23 @@ export const AuctionDataReport: React.FC<AuctionDataReportProps> = ({
                 {editingDateField === 'periodStart' ? (
                   <input
                     type="date"
-                    value={metadata.periodStart}
-                    onChange={(e) =>
-                      onUpdateMetadata({ ...metadata, periodStart: e.target.value })
-                    }
-                    onBlur={() => setEditingDateField(null)}
+                    value={dateDraft}
+                    onChange={(e) => setDateDraft(e.target.value)}
+                    onBlur={() => commitDateEdit('periodStart', dateDraft)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        commitDateEdit('periodStart', dateDraft);
+                      } else if (e.key === 'Escape') {
+                        setEditingDateField(null);
+                      }
+                    }}
                     autoFocus
                     className="bg-slate-50 border border-[#165B9D] rounded px-1.5 py-0 text-xs font-mono tabular-nums text-[#123B70] focus:outline-none"
                   />
                 ) : (
                   <button
                     type="button"
-                    onClick={() => setEditingDateField('periodStart')}
+                    onClick={() => startDateEdit('periodStart')}
                     title={isAr ? 'انقر لتعديل تاريخ البداية' : 'Click to edit start date'}
                     className="font-mono tabular-nums font-bold text-[#0F294A] hover:text-[#165B9D] cursor-pointer transition-colors"
                   >
@@ -309,18 +433,23 @@ export const AuctionDataReport: React.FC<AuctionDataReportProps> = ({
                 {editingDateField === 'periodEnd' ? (
                   <input
                     type="date"
-                    value={metadata.periodEnd}
-                    onChange={(e) =>
-                      onUpdateMetadata({ ...metadata, periodEnd: e.target.value })
-                    }
-                    onBlur={() => setEditingDateField(null)}
+                    value={dateDraft}
+                    onChange={(e) => setDateDraft(e.target.value)}
+                    onBlur={() => commitDateEdit('periodEnd', dateDraft)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        commitDateEdit('periodEnd', dateDraft);
+                      } else if (e.key === 'Escape') {
+                        setEditingDateField(null);
+                      }
+                    }}
                     autoFocus
                     className="bg-slate-50 border border-[#165B9D] rounded px-1.5 py-0 text-xs font-mono tabular-nums text-[#123B70] focus:outline-none"
                   />
                 ) : (
                   <button
                     type="button"
-                    onClick={() => setEditingDateField('periodEnd')}
+                    onClick={() => startDateEdit('periodEnd')}
                     title={isAr ? 'انقر لتعديل تاريخ النهاية' : 'Click to edit end date'}
                     className="font-mono tabular-nums font-bold text-[#0F294A] hover:text-[#165B9D] cursor-pointer transition-colors"
                   >
@@ -470,16 +599,13 @@ export const AuctionDataReport: React.FC<AuctionDataReportProps> = ({
         </div>
       )}
 
-      {inlineError && (
-        <div className="no-print mb-2 px-3 py-1.5 bg-red-50 border border-red-300 rounded-lg text-xs font-bold text-red-700 flex items-center justify-between">
-          <span>{inlineError}</span>
-          <button
-            type="button"
-            onClick={() => setInlineError(null)}
-            className="text-red-500 hover:text-red-800"
-          >
-            <X className="w-4 h-4" />
-          </button>
+      {inlineSubmitted && inlineValidation && !inlineValidation.valid && (
+        <div className="no-print mb-2 px-3 py-2 bg-red-50 border border-red-200 rounded-xl text-xs font-bold text-[#C52B36] flex items-center justify-between gap-2">
+          <span>
+            {isAr
+              ? 'يرجى تصحيح القيم المظللة باللون الأحمر في الصف قيد التحرير قبل الحفظ.'
+              : 'Please correct the highlighted invalid cells in the editing row before saving.'}
+          </span>
         </div>
       )}
 
@@ -698,11 +824,17 @@ export const AuctionDataReport: React.FC<AuctionDataReportProps> = ({
                 const rowBg = idx % 2 === 0 ? 'bg-[#FFFFFF]' : 'bg-[#E9EFF7]';
 
                 if (isEditing && inlineDraft) {
-                  const previewUnsold = Math.max(
-                    0,
-                    (Number(inlineDraft.listedVehicles) || 0) -
-                      (Number(inlineDraft.soldVehicles) || 0)
-                  );
+                  const previewListed = Math.max(0, Number(inlineListedRaw) || 0);
+                  const previewSold = Math.max(0, Number(inlineSoldRaw) || 0);
+                  const previewUnsold = Math.max(0, previewListed - previewSold);
+                  const cellErr = (field: AuctionFieldKey) =>
+                    inlineSubmitted
+                      ? inlineValidation?.fieldErrors[field]
+                      : undefined;
+                  const errAuc = cellErr('auctionNumber');
+                  const errDur = cellErr('durationAr');
+                  const errList = cellErr('listedVehicles');
+                  const errSld = cellErr('soldVehicles');
                   return (
                     <tr
                       key={item.id}
@@ -711,7 +843,7 @@ export const AuctionDataReport: React.FC<AuctionDataReportProps> = ({
                       <td className="py-1.5 px-2 border border-[#B8C4D4] text-center font-black tabular-nums">
                         {originalIndex}
                       </td>
-                      <td className="py-1.5 px-1.5 border border-[#B8C4D4] text-center">
+                      <td className="py-1.5 px-1.5 border border-[#B8C4D4] text-center align-top">
                         <input
                           type="text"
                           value={inlineDraft.auctionNumber}
@@ -721,10 +853,20 @@ export const AuctionDataReport: React.FC<AuctionDataReportProps> = ({
                               auctionNumber: e.target.value.toUpperCase(),
                             })
                           }
-                          className="w-full text-center font-mono font-bold bg-white border border-[#165B9D] rounded px-1 py-0.5"
+                          aria-invalid={Boolean(errAuc)}
+                          className={`w-full text-center font-mono font-bold rounded px-1 py-0.5 border focus:outline-none ${
+                            errAuc
+                              ? 'border-[#C52B36] bg-red-50'
+                              : 'border-[#165B9D] bg-white'
+                          }`}
                         />
+                        {errAuc && (
+                          <div className="mt-0.5 text-[10px] font-bold text-[#C52B36] leading-tight">
+                            {errAuc}
+                          </div>
+                        )}
                       </td>
-                      <td className="py-1.5 px-1.5 border border-[#B8C4D4] text-center">
+                      <td className="py-1.5 px-1.5 border border-[#B8C4D4] text-center align-top">
                         <input
                           type="text"
                           value={isAr ? inlineDraft.durationAr : inlineDraft.durationEn}
@@ -734,37 +876,58 @@ export const AuctionDataReport: React.FC<AuctionDataReportProps> = ({
                               [isAr ? 'durationAr' : 'durationEn']: e.target.value,
                             })
                           }
-                          className="w-full text-center bg-white border border-[#165B9D] rounded px-1 py-0.5"
+                          aria-invalid={Boolean(errDur)}
+                          className={`w-full text-center rounded px-1 py-0.5 border focus:outline-none ${
+                            errDur
+                              ? 'border-[#C52B36] bg-red-50'
+                              : 'border-[#165B9D] bg-white'
+                          }`}
                         />
+                        {errDur && (
+                          <div className="mt-0.5 text-[10px] font-bold text-[#C52B36] leading-tight">
+                            {errDur}
+                          </div>
+                        )}
                       </td>
-                      <td className="py-1.5 px-1.5 border border-[#B8C4D4] text-center">
+                      <td className="py-1.5 px-1.5 border border-[#B8C4D4] text-center align-top">
                         <input
                           type="number"
                           min={1}
-                          value={inlineDraft.listedVehicles}
-                          onChange={(e) =>
-                            setInlineDraft({
-                              ...inlineDraft,
-                              listedVehicles: Number(e.target.value),
-                            })
-                          }
-                          className="w-20 text-center font-mono font-bold bg-white border border-[#165B9D] rounded px-1 py-0.5"
+                          step={1}
+                          value={inlineListedRaw}
+                          onChange={(e) => setInlineListedRaw(e.target.value)}
+                          aria-invalid={Boolean(errList)}
+                          className={`w-20 text-center font-mono font-bold rounded px-1 py-0.5 border focus:outline-none ${
+                            errList
+                              ? 'border-[#C52B36] bg-red-50'
+                              : 'border-[#165B9D] bg-white'
+                          }`}
                         />
+                        {errList && (
+                          <div className="mt-0.5 text-[10px] font-bold text-[#C52B36] leading-tight">
+                            {errList}
+                          </div>
+                        )}
                       </td>
-                      <td className="py-1.5 px-1.5 border border-[#B8C4D4] text-center">
+                      <td className="py-1.5 px-1.5 border border-[#B8C4D4] text-center align-top">
                         <input
                           type="number"
                           min={0}
-                          max={inlineDraft.listedVehicles}
-                          value={inlineDraft.soldVehicles}
-                          onChange={(e) =>
-                            setInlineDraft({
-                              ...inlineDraft,
-                              soldVehicles: Number(e.target.value),
-                            })
-                          }
-                          className="w-20 text-center font-mono font-bold bg-white border border-[#165B9D] rounded px-1 py-0.5"
+                          step={1}
+                          value={inlineSoldRaw}
+                          onChange={(e) => setInlineSoldRaw(e.target.value)}
+                          aria-invalid={Boolean(errSld)}
+                          className={`w-20 text-center font-mono font-bold rounded px-1 py-0.5 border focus:outline-none ${
+                            errSld
+                              ? 'border-[#C52B36] bg-red-50'
+                              : 'border-[#165B9D] bg-white'
+                          }`}
                         />
+                        {errSld && (
+                          <div className="mt-0.5 text-[10px] font-bold text-[#C52B36] leading-tight">
+                            {errSld}
+                          </div>
+                        )}
                       </td>
                       <td className="py-1.5 px-2 border border-[#B8C4D4] text-center font-mono font-extrabold text-[#123B70]">
                         {previewUnsold}

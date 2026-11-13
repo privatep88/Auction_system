@@ -372,3 +372,58 @@
     page-break-inside: avoid;
   }
 }
+
+/* ============================================================================
+   SAAED SMART DIALOG & NOTIFICATION MOTION (Screen Only)
+   ============================================================================ */
+@keyframes saaedFadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes saaedDialogScaleIn {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.975);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes saaedToastSlideIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.saaed-dialog-backdrop {
+  animation: saaedFadeIn 160ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.saaed-dialog-panel {
+  animation: saaedDialogScaleIn 190ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.saaed-toast-enter {
+  animation: saaedToastSlideIn 200ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .saaed-dialog-backdrop,
+  .saaed-dialog-panel,
+  .saaed-toast-enter {
+    animation: none !important;
+  }
+}
+
