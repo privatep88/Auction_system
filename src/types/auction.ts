@@ -11,6 +11,7 @@ export interface AuctionRecord {
   year: number;
   month: number; // 1..12
   auctionNumber: string;
+  auctionDate?: string; // YYYY-MM-DD
   durationAr: string;
   durationEn: string;
   listedVehicles: number;

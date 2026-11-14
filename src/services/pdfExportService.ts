@@ -15,6 +15,7 @@ import {
   loadThresholds,
 } from './storageService';
 import { PaperSizeOption } from '../components/ExecutiveAuctionPrintReport';
+import { formatAuctionDateDisplay } from '../utils/auctionDateUtils';
 
 export type PdfExportStage =
   | 'STAGE_1_DATA_VALIDATION'
@@ -2163,22 +2164,22 @@ export async function buildExecutivePdfDocument(
      PAGE 3+: DETAILED AUCTION DATA TABLE (DYNAMIC MULTI-LINE PAGINATION)
      ========================================================================= */
   // RTL Column widths (total = contentW = 281mm on A4):
-  // 1. م (10mm) | 2. رقم المزاد (23mm) | 3. مدة عرض المزاد (28mm) | 4. المدرجة (21mm)
-  // 5. المبيعة (21mm) | 6. غير المبيعة (21mm) | 7. الملاحظات (52.3mm) | 8. التحديات (52.3mm) | 9. التوصيات (52.4mm)
+  // 1. م | 2. رقم المزاد | 3. تاريخ المزاد | 4. مدة عرض المزاد | 5. المدرجة | 6. المبيعة | 7. غير المبيعة | 8..10 Notes/Challenges/Recommendations
   const colFractions = [
-    0.036, // م
-    0.082, // رقم المزاد
-    0.102, // مدة عرض المزاد
-    0.076, // المركبات المدرجة
-    0.076, // المركبات المبيعة
-    0.076, // غير المبيعة
-    0.184, // الملاحظات
-    0.184, // التحديات
-    0.184, // التوصيات
+    0.034, // م
+    0.078, // رقم المزاد
+    0.088, // تاريخ المزاد
+    0.094, // مدة عرض المزاد
+    0.074, // المركبات المدرجة
+    0.074, // المركبات المبيعة
+    0.074, // غير المبيعة
+    0.161, // الملاحظات
+    0.161, // التحديات
+    0.162, // التوصيات
   ];
   const colWidths = colFractions.map((f) => f * contentW);
 
-  // Compute X coordinates of each column (RTL: col 0 is on the far right, col 8 on the far left)
+  // Compute X coordinates of each column (RTL: col 0 is on the far right, col 9 on the far left)
   const colXs: number[] = [];
   let runningRight = margin + contentW;
   for (let c = 0; c < colWidths.length; c++) {
@@ -2189,6 +2190,7 @@ export async function buildExecutivePdfDocument(
   const tableHeadersAr = [
     'م',
     'رقم المزاد',
+    'تاريخ المزاد',
     'مدة عرض المزاد',
     'المركبات المدرجة',
     'المركبات المبيعة',
@@ -2200,6 +2202,7 @@ export async function buildExecutivePdfDocument(
   const tableHeadersEn = [
     '#',
     'Auction ID',
+    'Auction Date',
     'Duration',
     'Listed',
     'Sold',
@@ -2218,17 +2221,17 @@ export async function buildExecutivePdfDocument(
     const notesLines = wrapTextToLines(
       doc,
       isAr ? auc.notesAr : auc.notesEn,
-      colWidths[6] - 4 * s
+      colWidths[7] - 4 * s
     );
     const challengesLines = wrapTextToLines(
       doc,
       isAr ? auc.challengesAr : auc.challengesEn,
-      colWidths[7] - 4 * s
+      colWidths[8] - 4 * s
     );
     const recsLines = wrapTextToLines(
       doc,
       isAr ? auc.recommendationsAr : auc.recommendationsEn,
-      colWidths[8] - 4 * s
+      colWidths[9] - 4 * s
     );
     const maxLines = Math.max(
       1,
@@ -2303,7 +2306,7 @@ export async function buildExecutivePdfDocument(
       doc.setLineWidth(0.28);
       doc.rect(colXs[c], tY, colWidths[c], tableHeaderH, 'FD');
       doc.setFont('IBMPlexSansArabic', 'bold');
-      doc.setFontSize(8.6 * s);
+      doc.setFontSize(8.4 * s);
       doc.setTextColor(255, 255, 255);
       drawSmartText(
         doc,
@@ -2367,48 +2370,70 @@ export async function buildExecutivePdfDocument(
           align: 'center',
         });
 
-        // Col 2: مدة عرض المزاد (smart Arabic duration)
+        // Col 2: تاريخ المزاد (DD/MM/YYYY or غير محدد)
+        const formattedDate = formatAuctionDateDisplay(auc.auctionDate, lang);
+        if (auc.auctionDate) {
+          doc.setFont('IBMPlexSansArabic', 'bold');
+          doc.setFontSize(8.4 * s);
+          doc.setTextColor(20, 36, 61);
+          doc.text(formattedDate, colXs[2] + colWidths[2] / 2, midY, {
+            align: 'center',
+          });
+        } else {
+          doc.setFont('IBMPlexSansArabic', 'semibold');
+          doc.setFontSize(8.0 * s);
+          doc.setTextColor(100, 116, 139);
+          drawSmartText(
+            doc,
+            formattedDate,
+            colXs[2] + colWidths[2] / 2,
+            midY,
+            'center'
+          );
+        }
+
+        // Col 3: مدة عرض المزاد (smart Arabic duration)
         doc.setFont('IBMPlexSansArabic', 'semibold');
-        doc.setFontSize(8.5 * s);
+        doc.setFontSize(8.4 * s);
         doc.setTextColor(20, 36, 61);
         drawSmartText(
           doc,
           isAr ? auc.durationAr : auc.durationEn,
-          colXs[2] + colWidths[2] / 2,
+          colXs[3] + colWidths[3] / 2,
           midY,
           'center'
         );
 
-        // Col 3: المركبات المدرجة
+        // Col 4: المركبات المدرجة
         doc.setFont('IBMPlexSansArabic', 'bold');
         doc.setFontSize(9.2 * s);
         doc.setTextColor(20, 36, 61);
         doc.text(
           auc.listedVehicles.toLocaleString('en-US'),
-          colXs[3] + colWidths[3] / 2,
-          midY,
-          { align: 'center' }
-        );
-
-        // Col 4: المركبات المبيعة
-        doc.setTextColor(22, 132, 59);
-        doc.text(
-          auc.soldVehicles.toLocaleString('en-US'),
           colXs[4] + colWidths[4] / 2,
           midY,
           { align: 'center' }
         );
 
-        // Col 5: غير المبيعة
-        doc.setTextColor(197, 43, 54);
+        // Col 5: المركبات المبيعة
+        doc.setTextColor(22, 132, 59);
         doc.text(
-          auc.unsoldVehicles.toLocaleString('en-US'),
+          auc.soldVehicles.toLocaleString('en-US'),
           colXs[5] + colWidths[5] / 2,
           midY,
           { align: 'center' }
         );
 
-        // Cols 6, 7, 8: Multi-line Notes, Challenges, Recommendations
+        // Col 6: غير المبيعة
+        doc.setTextColor(197, 43, 54);
+        doc.text(
+          auc.unsoldVehicles.toLocaleString('en-US'),
+          colXs[6] + colWidths[6] / 2,
+          midY,
+          { align: 'center' }
+        );
+
+        // Cols 7, 8, 9: Multi-line Notes, Challenges, Recommendations
         doc.setFont('IBMPlexSansArabic', 'semibold');
         doc.setFontSize(8.2 * s);
         doc.setTextColor(20, 36, 61);
@@ -2427,9 +2452,9 @@ export async function buildExecutivePdfDocument(
           });
         };
 
-        drawMultiLineCell(notesLines, 6);
-        drawMultiLineCell(challengesLines, 7);
-        drawMultiLineCell(recsLines, 8);
+        drawMultiLineCell(notesLines, 7);
+        drawMultiLineCell(challengesLines, 8);
+        drawMultiLineCell(recsLines, 9);
 
         tY += rowH;
       });
@@ -2437,8 +2462,9 @@ export async function buildExecutivePdfDocument(
 
     // Grand Total Row on the final table page
     if (isLastChunk) {
-      const spanRightW = colWidths[0] + colWidths[1] + colWidths[2];
-      const spanRightX = colXs[2];
+      const spanRightW =
+        colWidths[0] + colWidths[1] + colWidths[2] + colWidths[3];
+      const spanRightX = colXs[3];
 
       doc.setFillColor(18, 59, 112);
       doc.setDrawColor(18, 59, 112);
@@ -2458,40 +2484,40 @@ export async function buildExecutivePdfDocument(
       // Total Listed cell (#D6A348)
       doc.setFillColor(214, 163, 72);
       doc.setDrawColor(36, 82, 138);
-      doc.rect(colXs[3], tY, colWidths[3], grandTotalRowH, 'FD');
+      doc.rect(colXs[4], tY, colWidths[4], grandTotalRowH, 'FD');
       doc.setFont('IBMPlexSansArabic', 'bold');
       doc.setFontSize(10 * s);
       doc.setTextColor(20, 36, 61);
       doc.text(
         metrics.totalListed.toLocaleString('en-US'),
-        colXs[3] + colWidths[3] / 2,
+        colXs[4] + colWidths[4] / 2,
         tY + 6.8 * s,
         { align: 'center' }
       );
 
       // Total Sold cell (#E5BA63)
       doc.setFillColor(229, 186, 99);
-      doc.rect(colXs[4], tY, colWidths[4], grandTotalRowH, 'FD');
+      doc.rect(colXs[5], tY, colWidths[5], grandTotalRowH, 'FD');
       doc.text(
         metrics.totalSold.toLocaleString('en-US'),
-        colXs[4] + colWidths[4] / 2,
+        colXs[5] + colWidths[5] / 2,
         tY + 6.8 * s,
         { align: 'center' }
       );
 
       // Total Unsold cell (#D6A348)
       doc.setFillColor(214, 163, 72);
-      doc.rect(colXs[5], tY, colWidths[5], grandTotalRowH, 'FD');
+      doc.rect(colXs[6], tY, colWidths[6], grandTotalRowH, 'FD');
       doc.text(
         metrics.totalUnsold.toLocaleString('en-US'),
-        colXs[5] + colWidths[5] / 2,
+        colXs[6] + colWidths[6] / 2,
         tY + 6.8 * s,
         { align: 'center' }
       );
 
-      // Summary Sale Rate & Unsold Rate span across cols 6..8
-      const spanLeftW = colWidths[6] + colWidths[7] + colWidths[8];
-      const spanLeftX = colXs[8];
+      // Summary Sale Rate & Unsold Rate span across cols 7..9
+      const spanLeftW = colWidths[7] + colWidths[8] + colWidths[9];
+      const spanLeftX = colXs[9];
       doc.setFillColor(18, 59, 112);
       doc.setDrawColor(18, 59, 112);
       doc.rect(spanLeftX, tY, spanLeftW, grandTotalRowH, 'FD');
@@ -2792,9 +2818,9 @@ export async function buildExecutivePdfDocument(
 
     yPos += compHeaderBarH;
 
-    // 7 Comparative Columns (RTL):
-    // رقم المزاد | المركبات المدرجة | المركبات المبيعة | المركبات غير المبيعة | نسبة البيع | نسبة عدم البيع | تقييم الأداء
-    const compFracs = [0.13, 0.14, 0.14, 0.14, 0.14, 0.14, 0.17];
+    // 8 Comparative Columns (RTL):
+    // رقم المزاد | تاريخ المزاد | المركبات المدرجة | المركبات المبيعة | المركبات غير المبيعة | نسبة البيع | نسبة عدم البيع | تقييم الأداء
+    const compFracs = [0.115, 0.115, 0.125, 0.125, 0.125, 0.115, 0.12, 0.16];
     const compWidths = compFracs.map((f) => f * contentW);
     const compXs: number[] = [];
     let curR = margin + contentW;
@@ -2805,6 +2831,7 @@ export async function buildExecutivePdfDocument(
 
     const compHeadersAr = [
       'رقم المزاد',
+      'تاريخ المزاد',
       'المركبات المدرجة',
       'المركبات المبيعة',
       'المركبات غير المبيعة',
@@ -2814,6 +2841,7 @@ export async function buildExecutivePdfDocument(
     ];
     const compHeadersEn = [
       'Auction ID',
+      'Auction Date',
       'Listed Vehicles',
       'Sold Vehicles',
       'Unsold Vehicles',
@@ -2828,7 +2856,7 @@ export async function buildExecutivePdfDocument(
       doc.setLineWidth(0.25);
       doc.rect(compXs[c], yPos, compWidths[c], compColHeaderH, 'FD');
       doc.setFont('IBMPlexSansArabic', 'bold');
-      doc.setFontSize(8.3 * s);
+      doc.setFontSize(8.1 * s);
       doc.setTextColor(255, 255, 255);
       drawSmartText(
         doc,
@@ -2877,10 +2905,34 @@ export async function buildExecutivePdfDocument(
           align: 'center',
         });
 
+        // Col 1: تاريخ المزاد
+        const compFormattedDate = formatAuctionDateDisplay(auc.auctionDate, lang);
+        if (auc.auctionDate) {
+          doc.setFont('IBMPlexSansArabic', 'bold');
+          doc.setFontSize(8.3 * s);
+          doc.setTextColor(20, 36, 61);
+          doc.text(compFormattedDate, compXs[1] + compWidths[1] / 2, midY, {
+            align: 'center',
+          });
+        } else {
+          doc.setFont('IBMPlexSansArabic', 'semibold');
+          doc.setFontSize(7.8 * s);
+          doc.setTextColor(100, 116, 139);
+          drawSmartText(
+            doc,
+            compFormattedDate,
+            compXs[1] + compWidths[1] / 2,
+            midY,
+            'center'
+          );
+        }
+
+        doc.setFont('IBMPlexSansArabic', 'bold');
+        doc.setFontSize(8.5 * s);
         doc.setTextColor(20, 36, 61);
         doc.text(
           auc.listedVehicles.toLocaleString('en-US'),
-          compXs[1] + compWidths[1] / 2,
+          compXs[2] + compWidths[2] / 2,
           midY,
           { align: 'center' }
         );
@@ -2888,7 +2940,7 @@ export async function buildExecutivePdfDocument(
         doc.setTextColor(22, 132, 59);
         doc.text(
           auc.soldVehicles.toLocaleString('en-US'),
-          compXs[2] + compWidths[2] / 2,
+          compXs[3] + compWidths[3] / 2,
           midY,
           { align: 'center' }
         );
@@ -2896,7 +2948,7 @@ export async function buildExecutivePdfDocument(
         doc.setTextColor(197, 43, 54);
         doc.text(
           auc.unsoldVehicles.toLocaleString('en-US'),
-          compXs[3] + compWidths[3] / 2,
+          compXs[4] + compWidths[4] / 2,
           midY,
           { align: 'center' }
         );
@@ -2904,7 +2956,7 @@ export async function buildExecutivePdfDocument(
         doc.setTextColor(22, 132, 59);
         doc.text(
           `${auc.saleRate.toFixed(1)}%`,
-          compXs[4] + compWidths[4] / 2,
+          compXs[5] + compWidths[5] / 2,
           midY,
           { align: 'center' }
         );
@@ -2912,7 +2964,7 @@ export async function buildExecutivePdfDocument(
         doc.setTextColor(100, 116, 139);
         doc.text(
           `${auc.unsoldRate.toFixed(1)}%`,
-          compXs[5] + compWidths[5] / 2,
+          compXs[6] + compWidths[6] / 2,
           midY,
           { align: 'center' }
         );
@@ -2923,9 +2975,9 @@ export async function buildExecutivePdfDocument(
           thresholds,
           lang
         );
-        const pillW = compWidths[6] - 8 * s;
+        const pillW = compWidths[7] - 8 * s;
         const pillH = 5.2 * s;
-        const pillX = compXs[6] + 4 * s;
+        const pillX = compXs[7] + 4 * s;
         const pillY = yPos + (compRowH - pillH) / 2;
 
         if (auc.saleRate >= thresholds.excellentMin) {
@@ -2948,7 +3000,7 @@ export async function buildExecutivePdfDocument(
         drawSmartText(
           doc,
           badge.label,
-          compXs[6] + compWidths[6] / 2,
+          compXs[7] + compWidths[7] / 2,
           pillY + 3.7 * s,
           'center'
         );

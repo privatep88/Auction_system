@@ -47,6 +47,7 @@ import {
   loadThresholds,
   normalizeAuctionRecord,
   persistSingleAuctionToCloud,
+  reassignAuctionPeriod,
   resetOctoberReferenceData,
   restorePreMigrationBackup,
   saveFirebaseConfig,
@@ -350,7 +351,85 @@ export default function App() {
     );
   };
 
-  const handleSaveAuctionFromModal = async (record: AuctionRecord) => {
+  const handleSaveAuctionFromModal = async (
+    record: AuctionRecord,
+    targetPeriodOverride?: ReportingPeriod
+  ): Promise<boolean> => {
+    const effectivePeriod = targetPeriodOverride ?? selectedPeriod;
+    const isCrossPeriod =
+      effectivePeriod.year !== selectedPeriod.year ||
+      effectivePeriod.month !== selectedPeriod.month;
+    const targetMonthName = getMonthName(effectivePeriod.month, lang);
+
+    if (isCrossPeriod) {
+      const reassignRes = reassignAuctionPeriod({
+        record,
+        fromPeriod: selectedPeriod,
+        toPeriod: effectivePeriod,
+      });
+
+      if (!reassignRes.ok || !reassignRes.savedRecord) {
+        showError({
+          title: isAr
+            ? 'يوجد رقم مزاد مكرر في الشهر المستهدف'
+            : 'Duplicate Auction Number in Target Period',
+          message: isAr
+            ? `رقم المزاد (${record.auctionNumber}) مسجل بالفعل في شهر ${targetMonthName} ${effectivePeriod.year}.`
+            : `Auction (${record.auctionNumber}) already exists in ${targetMonthName} ${effectivePeriod.year}.`,
+          hint: isAr
+            ? 'يرجى تغيير رقم المزاد أو تعديل التاريخ حتى لا يتعارض مع سجل قائم في ذلك الشهر.'
+            : 'Change the auction number or adjust the date to avoid conflicting with an existing record.',
+          confirmText: isAr ? 'العودة للتصحيح' : 'Return & Fix',
+        });
+        return false;
+      }
+
+      const savedRec = reassignRes.savedRecord;
+      setAuctions(reassignRes.sourceAuctions || []);
+      refreshArchiveSummary();
+      setFormModalOpen(false);
+      setEditingRecord(null);
+
+      let cloudOk = true;
+      if (firebaseConnected) {
+        if (formModalMode === 'edit') {
+          await deleteSingleAuctionFromCloud({
+            ...savedRec,
+            year: selectedPeriod.year,
+            month: selectedPeriod.month,
+          });
+        }
+        cloudOk = await persistSingleAuctionToCloud(savedRec);
+      }
+
+      if (firebaseConnected && !cloudOk) {
+        showToast({
+          variant: 'warning',
+          title: isAr
+            ? `تم حفظ المزاد (${savedRec.auctionNumber}) محلياً فقط`
+            : `Saved (${savedRec.auctionNumber}) Locally Only`,
+          message: isAr
+            ? `تم الحفظ في أرشيف ${targetMonthName} ${effectivePeriod.year} وتعذرت المزامنة مع Firestore حالياً.`
+            : `Saved in ${targetMonthName} ${effectivePeriod.year}; Firestore sync failed.`,
+        });
+        return true;
+      }
+
+      showSuccess(
+        formModalMode === 'add'
+          ? isAr
+            ? `تمت إضافة المزاد (${savedRec.auctionNumber}) بنجاح`
+            : `Auction (${savedRec.auctionNumber}) Added`
+          : isAr
+          ? `تم نقل وحفظ المزاد (${savedRec.auctionNumber}) بنجاح`
+          : `Auction (${savedRec.auctionNumber}) Moved & Saved`,
+        isAr
+          ? `أرشيف شهر ${targetMonthName} ${effectivePeriod.year}`
+          : `${targetMonthName} ${effectivePeriod.year} Archive`
+      );
+      return true;
+    }
+
     const normalized = normalizeAuctionRecord(record, selectedPeriod);
     let updatedList: AuctionRecord[];
     if (formModalMode === 'add') {
@@ -383,7 +462,7 @@ export default function App() {
           ? 'تعذر المزامنة مع Firestore حالياً — تم حفظ السجل بأمان في المتصفح.'
           : 'Could not sync to Firestore right now — record safely stored locally.',
       });
-      return;
+      return true;
     }
 
     showSuccess(
@@ -398,24 +477,88 @@ export default function App() {
         ? `شهر ${currentMonthName} ${selectedPeriod.year}`
         : `${currentMonthName} ${selectedPeriod.year}`
     );
+    return true;
   };
 
-  const handleInlineSaveAuction = (
-    draft: AuctionRecord
-  ): { ok: boolean; error?: string } => {
+  const handleInlineSaveAuction = async (
+    draft: AuctionRecord,
+    targetPeriodOverride?: ReportingPeriod
+  ): Promise<{ ok: boolean; error?: string }> => {
     const validation = validateAuctionDraft(draft, auctions, {
       lang,
       periodLabel: `${currentMonthName} ${selectedPeriod.year}`,
       requireDuration: true,
+      requireDate: false,
     });
     if (!validation.valid) {
       return {
         ok: false,
-        error: validation.summaryMessages[0] || (isAr ? 'بيانات غير صالحة' : 'Invalid data'),
+        error:
+          validation.summaryMessages[0] ||
+          (isAr ? 'بيانات غير صالحة' : 'Invalid data'),
       };
     }
 
     const cleanCode = draft.auctionNumber.trim().toUpperCase();
+    const effectivePeriod = targetPeriodOverride ?? selectedPeriod;
+    const isCrossPeriod =
+      effectivePeriod.year !== selectedPeriod.year ||
+      effectivePeriod.month !== selectedPeriod.month;
+
+    if (isCrossPeriod) {
+      const targetMonthName = getMonthName(effectivePeriod.month, lang);
+      const reassignRes = reassignAuctionPeriod({
+        record: {
+          ...draft,
+          auctionNumber: cleanCode,
+          updatedAt: new Date().toISOString(),
+        },
+        fromPeriod: selectedPeriod,
+        toPeriod: effectivePeriod,
+      });
+
+      if (!reassignRes.ok || !reassignRes.savedRecord) {
+        return {
+          ok: false,
+          error: isAr
+            ? `رقم المزاد (${cleanCode}) موجود مسبقاً في شهر ${targetMonthName} ${effectivePeriod.year}.`
+            : `Auction number (${cleanCode}) already exists in ${targetMonthName} ${effectivePeriod.year}.`,
+        };
+      }
+
+      const savedRec = reassignRes.savedRecord;
+      setAuctions(reassignRes.sourceAuctions || []);
+      refreshArchiveSummary();
+
+      if (firebaseConnected) {
+        await deleteSingleAuctionFromCloud({
+          ...savedRec,
+          year: selectedPeriod.year,
+          month: selectedPeriod.month,
+        });
+        const ok = await persistSingleAuctionToCloud(savedRec);
+        if (!ok) {
+          showToast({
+            variant: 'warning',
+            title: isAr ? 'تنبيه المزامنة السحابية' : 'Cloud Sync Notice',
+            message: isAr
+              ? `تم نقل (${savedRec.auctionNumber}) محلياً وتعذرت المزامنة مع Firestore حالياً.`
+              : `Moved (${savedRec.auctionNumber}) locally; Firestore sync failed.`,
+          });
+        }
+      }
+
+      showSuccess(
+        isAr
+          ? `تم نقل وحفظ المزاد (${savedRec.auctionNumber}) بنجاح`
+          : `Auction (${savedRec.auctionNumber}) Moved & Saved`,
+        isAr
+          ? `أرشيف شهر ${targetMonthName} ${effectivePeriod.year}`
+          : `${targetMonthName} ${effectivePeriod.year} Archive`
+      );
+      return { ok: true };
+    }
+
     const normalized = normalizeAuctionRecord(
       {
         ...draft,

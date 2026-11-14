@@ -11,6 +11,7 @@ import {
   evaluateAuctionPerformance,
   getMonthName,
 } from './storageService';
+import { isoDateToExcelDate } from '../utils/auctionDateUtils';
 
 async function fetchImageAsBase64(url: string): Promise<string | null> {
   try {
@@ -42,7 +43,11 @@ export async function exportExecutiveExcelReport(params: {
   const { auctions, metrics, metadata, selectedPeriod, thresholds, lang } =
     params;
   const isAr = lang === 'ar';
-  const assetBase = import.meta.env.BASE_URL || './';
+  const assetBase =
+    (typeof import.meta !== 'undefined' &&
+      import.meta.env &&
+      import.meta.env.BASE_URL) ||
+    './';
   const monthNameAr = getMonthName(selectedPeriod.month, 'ar');
   const monthNameEn = getMonthName(selectedPeriod.month, 'en');
   const paddedMonth = String(selectedPeriod.month).padStart(2, '0');
@@ -99,6 +104,7 @@ export async function exportExecutiveExcelReport(params: {
   sheet1.columns = [
     { key: 'seq', width: 8 },
     { key: 'code', width: 16 },
+    { key: 'auctionDate', width: 16 },
     { key: 'duration', width: 20 },
     { key: 'listed', width: 18 },
     { key: 'sold', width: 18 },
@@ -120,7 +126,7 @@ export async function exportExecutiveExcelReport(params: {
     fgColor: { argb: 'FFFFFFFF' },
   };
 
-  sheet1.mergeCells('C1:F1');
+  sheet1.mergeCells('C1:G1');
   const s1TitleAr = sheet1.getCell('C1');
   s1TitleAr.value = `تقرير بيانات المزادات — شهر ${monthNameAr} ${selectedPeriod.year}`;
   s1TitleAr.font = {
@@ -136,7 +142,7 @@ export async function exportExecutiveExcelReport(params: {
     fgColor: { argb: 'FF123B70' },
   };
 
-  sheet1.mergeCells('C2:F2');
+  sheet1.mergeCells('C2:G2');
   const s1TitleEn = sheet1.getCell('C2');
   s1TitleEn.value = `Vehicle Auction Data Report — ${monthNameEn} ${selectedPeriod.year}`;
   s1TitleEn.font = {
@@ -152,8 +158,8 @@ export async function exportExecutiveExcelReport(params: {
     fgColor: { argb: 'FF165B9D' },
   };
 
-  sheet1.mergeCells('G1:I3');
-  const s1PhotoCell = sheet1.getCell('G1');
+  sheet1.mergeCells('H1:J3');
+  const s1PhotoCell = sheet1.getCell('H1');
   s1PhotoCell.fill = {
     type: 'pattern',
     pattern: 'solid',
@@ -168,7 +174,7 @@ export async function exportExecutiveExcelReport(params: {
   }
   if (topPhotoId !== null) {
     sheet1.addImage(topPhotoId, {
-      tl: { col: 6.05, row: 0.08 },
+      tl: { col: 7.05, row: 0.08 },
       ext: { width: 490, height: 94 },
     });
   }
@@ -189,7 +195,7 @@ export async function exportExecutiveExcelReport(params: {
     fgColor: { argb: 'FFEEF3F9' },
   };
 
-  sheet1.mergeCells('D3:F3');
+  sheet1.mergeCells('D3:G3');
   const s1PeriodCell = sheet1.getCell('D3');
   s1PeriodCell.value = `الفترة الزمنية للتقرير : شهر ${monthNameAr} ${selectedPeriod.year} (من ${metadata.periodStart} إلى ${metadata.periodEnd})`;
   s1PeriodCell.font = {
@@ -231,56 +237,56 @@ export async function exportExecutiveExcelReport(params: {
       color: 'FF922C35',
     },
     {
-      titleCols: 'C5:C5',
-      valCols: 'C6:C6',
+      titleCols: 'C5:D5',
+      valCols: 'C6:D6',
       cellTitle: 'C5',
       cellVal: 'C6',
       title: isAr ? 'إجمالي المركبات المدرجة' : 'Total Listed Vehicles',
-      formula: `D${totalRowIdx}`,
+      formula: `E${totalRowIdx}`,
       result: metrics.totalListed,
       numFmt: '#,##0',
       color: 'FF922C35',
     },
     {
-      titleCols: 'D5:E5',
-      valCols: 'D6:E6',
-      cellTitle: 'D5',
-      cellVal: 'D6',
+      titleCols: 'E5:F5',
+      valCols: 'E6:F6',
+      cellTitle: 'E5',
+      cellVal: 'E6',
       title: isAr ? 'إجمالي المركبات المبيعة' : 'Total Sold Vehicles',
-      formula: `E${totalRowIdx}`,
+      formula: `F${totalRowIdx}`,
       result: metrics.totalSold,
       numFmt: '#,##0',
       color: 'FF922C35',
     },
     {
-      titleCols: 'F5:G5',
-      valCols: 'F6:G6',
-      cellTitle: 'F5',
-      cellVal: 'F6',
+      titleCols: 'G5:H5',
+      valCols: 'G6:H6',
+      cellTitle: 'G5',
+      cellVal: 'G6',
       title: isAr ? 'إجمالي المركبات غير المبيعة' : 'Total Unsold Vehicles',
-      formula: `F${totalRowIdx}`,
+      formula: `G${totalRowIdx}`,
       result: metrics.totalUnsold,
       numFmt: '#,##0',
       color: 'FF922C35',
-    },
-    {
-      titleCols: 'H5:H5',
-      valCols: 'H6:H6',
-      cellTitle: 'H5',
-      cellVal: 'H6',
-      title: isAr ? 'نسبة البيع الإجمالية' : 'Overall Sale Rate',
-      formula: `IF(D${totalRowIdx}>0,E${totalRowIdx}/D${totalRowIdx},0)`,
-      result: metrics.overallSaleRate / 100,
-      numFmt: '0.0%',
-      color: 'FF16843A',
     },
     {
       titleCols: 'I5:I5',
       valCols: 'I6:I6',
       cellTitle: 'I5',
       cellVal: 'I6',
+      title: isAr ? 'نسبة البيع الإجمالية' : 'Overall Sale Rate',
+      formula: `IF(E${totalRowIdx}>0,F${totalRowIdx}/E${totalRowIdx},0)`,
+      result: metrics.overallSaleRate / 100,
+      numFmt: '0.0%',
+      color: 'FF16843A',
+    },
+    {
+      titleCols: 'J5:J5',
+      valCols: 'J6:J6',
+      cellTitle: 'J5',
+      cellVal: 'J6',
       title: isAr ? 'نسبة عدم البيع' : 'Unsold Rate',
-      formula: `IF(D${totalRowIdx}>0,F${totalRowIdx}/D${totalRowIdx},0)`,
+      formula: `IF(E${totalRowIdx}>0,G${totalRowIdx}/E${totalRowIdx},0)`,
       result: metrics.overallUnsoldRate / 100,
       numFmt: '0.0%',
       color: 'FF922C35',
@@ -342,6 +348,7 @@ export async function exportExecutiveExcelReport(params: {
     ? [
         'م',
         'رقم المزاد',
+        'تاريخ المزاد',
         'مدة عرض المزاد',
         'عدد المركبات المدرجة',
         'عدد المركبات المبيعة',
@@ -353,6 +360,7 @@ export async function exportExecutiveExcelReport(params: {
     : [
         '#',
         'Auction No.',
+        'Auction Date',
         'Auction Duration',
         'Listed Vehicles',
         'Sold Vehicles',
@@ -392,17 +400,17 @@ export async function exportExecutiveExcelReport(params: {
   if (auctions.length === 0) {
     const emptyRow = sheet1.getRow(dataStartRow);
     emptyRow.height = 28;
-    sheet1.mergeCells(`A${dataStartRow}:C${dataStartRow}`);
+    sheet1.mergeCells(`A${dataStartRow}:D${dataStartRow}`);
     emptyRow.getCell(1).value = isAr
       ? `لا توجد مزادات مسجلة لشهر ${monthNameAr} ${selectedPeriod.year}`
       : `No auctions recorded for ${monthNameEn} ${selectedPeriod.year}`;
-    emptyRow.getCell(4).value = 0;
     emptyRow.getCell(5).value = 0;
     emptyRow.getCell(6).value = 0;
-    emptyRow.getCell(7).value = '—';
+    emptyRow.getCell(7).value = 0;
     emptyRow.getCell(8).value = '—';
     emptyRow.getCell(9).value = '—';
-    for (let c = 1; c <= 9; c++) {
+    emptyRow.getCell(10).value = '—';
+    for (let c = 1; c <= 10; c++) {
       const cell = emptyRow.getCell(c);
       cell.font = { name: 'Cairo', size: 11, bold: true, color: { argb: 'FF64748B' } };
       cell.alignment = { horizontal: 'center', vertical: 'middle' };
@@ -413,27 +421,30 @@ export async function exportExecutiveExcelReport(params: {
       const row = sheet1.getRow(rIdx);
       row.height = 24;
       const bgArgb = idx % 2 === 0 ? 'FFFFFFFF' : 'FFE9EFF7';
+      const excelDate = isoDateToExcelDate(auc.auctionDate);
 
       row.getCell(1).value = idx + 1;
       row.getCell(2).value = auc.auctionNumber;
-      row.getCell(3).value = isAr ? auc.durationAr : auc.durationEn;
-      row.getCell(4).value = auc.listedVehicles;
-      row.getCell(5).value = auc.soldVehicles;
-      row.getCell(6).value = {
-        formula: `D${rIdx}-E${rIdx}`,
+      row.getCell(3).value =
+        excelDate ?? (isAr ? 'غير محدد' : 'Not specified');
+      row.getCell(4).value = isAr ? auc.durationAr : auc.durationEn;
+      row.getCell(5).value = auc.listedVehicles;
+      row.getCell(6).value = auc.soldVehicles;
+      row.getCell(7).value = {
+        formula: `E${rIdx}-F${rIdx}`,
         result: auc.unsoldVehicles,
       };
-      row.getCell(7).value = isAr ? auc.notesAr : auc.notesEn;
-      row.getCell(8).value = isAr ? auc.challengesAr : auc.challengesEn;
-      row.getCell(9).value = isAr ? auc.recommendationsAr : auc.recommendationsEn;
+      row.getCell(8).value = isAr ? auc.notesAr : auc.notesEn;
+      row.getCell(9).value = isAr ? auc.challengesAr : auc.challengesEn;
+      row.getCell(10).value = isAr ? auc.recommendationsAr : auc.recommendationsEn;
 
-      for (let c = 1; c <= 9; c++) {
+      for (let c = 1; c <= 10; c++) {
         const cell = row.getCell(c);
         cell.font = {
           name: 'Cairo',
           size: 11,
-          bold: c <= 6,
-          color: { argb: 'FF0F172A' },
+          bold: c <= 7,
+          color: { argb: c === 3 && !excelDate ? 'FF64748B' : 'FF0F172A' },
         };
         cell.fill = {
           type: 'pattern',
@@ -445,7 +456,10 @@ export async function exportExecutiveExcelReport(params: {
           vertical: 'middle',
           wrapText: true,
         };
-        if (c >= 4 && c <= 6) {
+        if (c === 3 && excelDate) {
+          cell.numFmt = 'dd/mm/yyyy';
+        }
+        if (c >= 5 && c <= 7) {
           cell.numFmt = '#,##0';
         }
         cell.border = {
@@ -461,29 +475,29 @@ export async function exportExecutiveExcelReport(params: {
   // Totals Row (Gold + Navy)
   const totalRow = sheet1.getRow(totalRowIdx);
   totalRow.height = 28;
-  sheet1.mergeCells(`A${totalRowIdx}:C${totalRowIdx}`);
+  sheet1.mergeCells(`A${totalRowIdx}:D${totalRowIdx}`);
   const totLabelCell = sheet1.getCell(`A${totalRowIdx}`);
   totLabelCell.value = isAr ? 'الإجمالي' : 'Total';
 
-  totalRow.getCell(4).value = {
-    formula: `SUM(D${dataStartRow}:D${dataEndRow})`,
-    result: metrics.totalListed,
-  };
   totalRow.getCell(5).value = {
     formula: `SUM(E${dataStartRow}:E${dataEndRow})`,
-    result: metrics.totalSold,
+    result: metrics.totalListed,
   };
   totalRow.getCell(6).value = {
     formula: `SUM(F${dataStartRow}:F${dataEndRow})`,
+    result: metrics.totalSold,
+  };
+  totalRow.getCell(7).value = {
+    formula: `SUM(G${dataStartRow}:G${dataEndRow})`,
     result: metrics.totalUnsold,
   };
-  totalRow.getCell(7).value = '—';
   totalRow.getCell(8).value = '—';
   totalRow.getCell(9).value = '—';
+  totalRow.getCell(10).value = '—';
 
-  for (let c = 1; c <= 9; c++) {
+  for (let c = 1; c <= 10; c++) {
     const cell = totalRow.getCell(c);
-    const isGold = c >= 4 && c <= 6;
+    const isGold = c >= 5 && c <= 7;
     cell.font = {
       name: 'Cairo',
       size: 12,
@@ -529,11 +543,12 @@ export async function exportExecutiveExcelReport(params: {
 
   sheet2.columns = [
     { key: 'c1', width: 16 },
+    { key: 'cDate', width: 15 },
     { key: 'c2', width: 15 },
     { key: 'c3', width: 15 },
     { key: 'c4', width: 15 },
-    { key: 'c5', width: 16 },
-    { key: 'c6', width: 16 },
+    { key: 'c5', width: 15 },
+    { key: 'c6', width: 15 },
     { key: 'c7', width: 22 },
     { key: 'c8', width: 32 },
     { key: 'c9', width: 32 },
@@ -550,7 +565,7 @@ export async function exportExecutiveExcelReport(params: {
     fgColor: { argb: 'FFFFFFFF' },
   };
 
-  sheet2.mergeCells('C1:G1');
+  sheet2.mergeCells('C1:H1');
   const s2TitleAr = sheet2.getCell('C1');
   s2TitleAr.value = `لوحة التحليل التنفيذي لأداء المزادات — شهر ${monthNameAr} ${selectedPeriod.year}`;
   s2TitleAr.font = {
@@ -566,7 +581,7 @@ export async function exportExecutiveExcelReport(params: {
     fgColor: { argb: 'FF123B70' },
   };
 
-  sheet2.mergeCells('C2:G2');
+  sheet2.mergeCells('C2:H2');
   const s2TitleEn = sheet2.getCell('C2');
   s2TitleEn.value = `Executive Auction Performance Dashboard — ${monthNameEn} ${selectedPeriod.year}`;
   s2TitleEn.font = {
@@ -582,8 +597,8 @@ export async function exportExecutiveExcelReport(params: {
     fgColor: { argb: 'FF165B9D' },
   };
 
-  sheet2.mergeCells('H1:J2');
-  sheet2.getCell('H1').fill = {
+  sheet2.mergeCells('I1:K2');
+  sheet2.getCell('I1').fill = {
     type: 'pattern',
     pattern: 'solid',
     fgColor: { argb: 'FF123B70' },
@@ -597,7 +612,7 @@ export async function exportExecutiveExcelReport(params: {
   }
   if (bottomPhotoId !== null) {
     sheet2.addImage(bottomPhotoId, {
-      tl: { col: 7.05, row: 0.08 },
+      tl: { col: 8.05, row: 0.08 },
       ext: { width: 460, height: 74 },
     });
   }
@@ -624,7 +639,7 @@ export async function exportExecutiveExcelReport(params: {
       cTitle: 'C4',
       cVal: 'C5',
       title: isAr ? 'إجمالي المركبات المدرجة' : 'Total Listed Vehicles',
-      formula: `'تقرير بيانات المزادات'!D${totalRowIdx}`,
+      formula: `'تقرير بيانات المزادات'!E${totalRowIdx}`,
       result: metrics.totalListed,
       numFmt: '#,##0',
       color: 'FF922C35',
@@ -635,7 +650,7 @@ export async function exportExecutiveExcelReport(params: {
       cTitle: 'E4',
       cVal: 'E5',
       title: isAr ? 'إجمالي المركبات المبيعة' : 'Total Sold Vehicles',
-      formula: `'تقرير بيانات المزادات'!E${totalRowIdx}`,
+      formula: `'تقرير بيانات المزادات'!F${totalRowIdx}`,
       result: metrics.totalSold,
       numFmt: '#,##0',
       color: 'FF922C35',
@@ -646,7 +661,7 @@ export async function exportExecutiveExcelReport(params: {
       cTitle: 'G4',
       cVal: 'G5',
       title: isAr ? 'إجمالي المركبات غير المبيعة' : 'Total Unsold Vehicles',
-      formula: `'تقرير بيانات المزادات'!F${totalRowIdx}`,
+      formula: `'تقرير بيانات المزادات'!G${totalRowIdx}`,
       result: metrics.totalUnsold,
       numFmt: '#,##0',
       color: 'FF922C35',
@@ -657,18 +672,18 @@ export async function exportExecutiveExcelReport(params: {
       cTitle: 'I4',
       cVal: 'I5',
       title: isAr ? 'نسبة نجاح البيع' : 'Sale Success Rate',
-      formula: `'تقرير بيانات المزادات'!H6`,
+      formula: `'تقرير بيانات المزادات'!I6`,
       result: metrics.overallSaleRate / 100,
       numFmt: '0.0%',
       color: 'FF16843A',
     },
     {
-      titleCols: 'J4:J4',
-      valCols: 'J5:J5',
+      titleCols: 'J4:K4',
+      valCols: 'J5:K5',
       cTitle: 'J4',
       cVal: 'J5',
       title: isAr ? 'متوسط المبيعات لكل مزاد (مركبة/مزاد)' : 'Avg Sold / Auction',
-      formula: `IF('تقرير بيانات المزادات'!A6>0,ROUND('تقرير بيانات المزادات'!E${totalRowIdx}/'تقرير بيانات المزادات'!A6,0),0)`,
+      formula: `IF('تقرير بيانات المزادات'!A6>0,ROUND('تقرير بيانات المزادات'!F${totalRowIdx}/'تقرير بيانات المزادات'!A6,0),0)`,
       result: metrics.avgSoldPerAuction,
       numFmt: '#,##0',
       color: 'FF123B70',
@@ -727,7 +742,7 @@ export async function exportExecutiveExcelReport(params: {
   const s2HeaderRow = sheet2.getRow(7);
   s2HeaderRow.height = 26;
 
-  sheet2.mergeCells('A7:G7');
+  sheet2.mergeCells('A7:H7');
   const compTitleCell = sheet2.getCell('A7');
   compTitleCell.value = isAr
     ? `التحليل المقارن لأداء المزادات — شهر ${monthNameAr} ${selectedPeriod.year}`
@@ -746,13 +761,13 @@ export async function exportExecutiveExcelReport(params: {
   compTitleCell.alignment = { horizontal: 'center', vertical: 'middle' };
 
   const opHeaders = [
-    { col: 'H7', title: isAr ? 'أبرز الملاحظات التشغيلية' : 'Operational Notes' },
+    { col: 'I7', title: isAr ? 'أبرز الملاحظات التشغيلية' : 'Operational Notes' },
     {
-      col: 'I7',
+      col: 'J7',
       title: isAr ? 'التحديات التشغيلية الرئيسية' : 'Operational Challenges',
     },
     {
-      col: 'J7',
+      col: 'K7',
       title: isAr
         ? 'التوصيات والإجراءات التحسينية'
         : 'Recommendations & Improvement Actions',
@@ -780,6 +795,7 @@ export async function exportExecutiveExcelReport(params: {
   const compCols = isAr
     ? [
         'رقم المزاد',
+        'تاريخ المزاد',
         'المدرجة',
         'المبيعة',
         'غير المبيعة',
@@ -789,6 +805,7 @@ export async function exportExecutiveExcelReport(params: {
       ]
     : [
         'Auction No.',
+        'Auction Date',
         'Listed',
         'Sold',
         'Unsold',
@@ -813,7 +830,7 @@ export async function exportExecutiveExcelReport(params: {
     c.alignment = { horizontal: 'center', vertical: 'middle' };
   });
 
-  ['H8', 'I8', 'J8'].forEach((addr, idx) => {
+  ['I8', 'J8', 'K8'].forEach((addr, idx) => {
     const c = sheet2.getCell(addr);
     c.value =
       idx === 0
@@ -848,29 +865,34 @@ export async function exportExecutiveExcelReport(params: {
     const row = sheet2.getRow(rIdx);
     row.height = 24;
     const bgArgb = idx % 2 === 0 ? 'FFFFFFFF' : 'FFE9EFF7';
+    const excelDate = isoDateToExcelDate(auc.auctionDate);
 
     row.getCell(1).value = {
       formula: `'تقرير بيانات المزادات'!B${s1Row}`,
       result: auc.auctionNumber,
     };
     row.getCell(2).value = {
-      formula: `'تقرير بيانات المزادات'!D${s1Row}`,
-      result: auc.listedVehicles,
+      formula: `'تقرير بيانات المزادات'!C${s1Row}`,
+      result: excelDate ?? (isAr ? 'غير محدد' : 'Not specified'),
     };
     row.getCell(3).value = {
       formula: `'تقرير بيانات المزادات'!E${s1Row}`,
-      result: auc.soldVehicles,
+      result: auc.listedVehicles,
     };
     row.getCell(4).value = {
-      formula: `B${rIdx}-C${rIdx}`,
-      result: auc.unsoldVehicles,
+      formula: `'تقرير بيانات المزادات'!F${s1Row}`,
+      result: auc.soldVehicles,
     };
     row.getCell(5).value = {
-      formula: `IF(B${rIdx}>0,C${rIdx}/B${rIdx},0)`,
-      result: auc.saleRate / 100,
+      formula: `C${rIdx}-D${rIdx}`,
+      result: auc.unsoldVehicles,
     };
     row.getCell(6).value = {
-      formula: `IF(B${rIdx}>0,D${rIdx}/B${rIdx},0)`,
+      formula: `IF(C${rIdx}>0,D${rIdx}/C${rIdx},0)`,
+      result: auc.saleRate / 100,
+    };
+    row.getCell(7).value = {
+      formula: `IF(C${rIdx}>0,E${rIdx}/C${rIdx},0)`,
       result: auc.unsoldRate / 100,
     };
 
@@ -878,27 +900,28 @@ export async function exportExecutiveExcelReport(params: {
     const goodThresholdDec = thresholds.goodMin / 100;
     const warnThresholdDec = thresholds.needsImprovementMin / 100;
 
-    row.getCell(7).value = {
-      formula: `IF(E${rIdx}>=${goodThresholdDec},"أداء جيد",IF(E${rIdx}>=${warnThresholdDec},"يحتاج إلى تحسين","منخفض"))`,
+    row.getCell(8).value = {
+      formula: `IF(F${rIdx}>=${goodThresholdDec},"أداء جيد",IF(F${rIdx}>=${warnThresholdDec},"يحتاج إلى تحسين","منخفض"))`,
       result: evalBadge.label,
     };
 
-    row.getCell(8).value = `• ${isAr ? auc.notesAr : auc.notesEn} (${
+    row.getCell(9).value = `• ${isAr ? auc.notesAr : auc.notesEn} (${
       auc.auctionNumber
     })`;
-    row.getCell(9).value = `• ${isAr ? auc.challengesAr : auc.challengesEn} (${
+    row.getCell(10).value = `• ${isAr ? auc.challengesAr : auc.challengesEn} (${
       auc.auctionNumber
     })`;
-    row.getCell(10).value = `• ${
+    row.getCell(11).value = `• ${
       isAr ? auc.recommendationsAr : auc.recommendationsEn
     } (${auc.auctionNumber})`;
 
-    for (let c = 1; c <= 10; c++) {
+    for (let c = 1; c <= 11; c++) {
       const cell = row.getCell(c);
       let fg = bgArgb;
       let fontColor = 'FF0F172A';
-      if (c === 5) fontColor = 'FF16843A';
-      if (c === 7) {
+      if (c === 2 && !excelDate) fontColor = 'FF64748B';
+      if (c === 6) fontColor = 'FF16843A';
+      if (c === 8) {
         fg =
           evalBadge.tier === 'excellent' || evalBadge.tier === 'good'
             ? 'FFD7F0D8'
@@ -916,7 +939,7 @@ export async function exportExecutiveExcelReport(params: {
       cell.font = {
         name: 'Cairo',
         size: 11,
-        bold: c <= 7,
+        bold: c <= 8,
         color: { argb: fontColor },
       };
       cell.fill = {
@@ -925,12 +948,13 @@ export async function exportExecutiveExcelReport(params: {
         fgColor: { argb: fg },
       };
       cell.alignment = {
-        horizontal: c <= 7 ? 'center' : 'right',
+        horizontal: c <= 8 ? 'center' : 'right',
         vertical: 'middle',
         wrapText: true,
       };
-      if (c >= 2 && c <= 4) cell.numFmt = '#,##0';
-      if (c === 5 || c === 6) cell.numFmt = '0.0%';
+      if (c === 2 && excelDate) cell.numFmt = 'dd/mm/yyyy';
+      if (c >= 3 && c <= 5) cell.numFmt = '#,##0';
+      if (c === 6 || c === 7) cell.numFmt = '0.0%';
       cell.border = {
         top: { style: 'thin', color: { argb: 'FFBCC8D6' } },
         bottom: { style: 'thin', color: { argb: 'FFBCC8D6' } },
@@ -978,10 +1002,10 @@ export async function exportExecutiveExcelReport(params: {
   };
   rankHeader.alignment = { horizontal: 'center', vertical: 'middle' };
 
-  sheet2.mergeCells(`I${summaryStartRow}:J${summaryStartRow + 5}`);
+  sheet2.mergeCells(`I${summaryStartRow}:K${summaryStartRow + 5}`);
   if (carsPhotoId !== null) {
     sheet2.addImage(carsPhotoId, {
-      tl: { col: 8.05, row: summaryStartRow - 0.9 },
+      tl: { col: 8.15, row: summaryStartRow - 0.9 },
       ext: { width: 380, height: 145 },
     });
   }

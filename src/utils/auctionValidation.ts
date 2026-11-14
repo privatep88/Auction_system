@@ -5,8 +5,11 @@ import {
   ReportMetadata,
 } from '../types/auction';
 
+import { isValidIsoDate } from './auctionDateUtils';
+
 export type AuctionFieldKey =
   | 'auctionNumber'
+  | 'auctionDate'
   | 'durationAr'
   | 'durationEn'
   | 'listedVehicles'
@@ -31,6 +34,7 @@ export interface AuctionValidationResult {
 export interface AuctionDraftInput {
   id?: string;
   auctionNumber: string;
+  auctionDate?: string;
   durationAr?: string;
   durationEn?: string;
   listedVehicles: number | string;
@@ -43,7 +47,8 @@ export interface AuctionDraftInput {
 /**
  * Validates auction input values consistently for both modal forms and inline table editing.
  * Enforces positive integers for listed vehicles, non-negative integers <= listed for sold vehicles,
- * required auction number, non-duplicate auction code within the target month/year, and clean duration.
+ * required auction number, non-duplicate auction code within the target month/year, valid YYYY-MM-DD date,
+ * and clean duration.
  */
 export function validateAuctionDraft(
   draft: AuctionDraftInput,
@@ -52,6 +57,7 @@ export function validateAuctionDraft(
     lang: Language;
     periodLabel?: string;
     requireDuration?: boolean;
+    requireDate?: boolean;
   }
 ): AuctionValidationResult {
   const isAr = options.lang === 'ar';
@@ -91,6 +97,29 @@ export function validateAuctionDraft(
           : `Auction number (${cleanCode}) already exists in this period${periodSuffix}.`
       );
     }
+  }
+
+  // 1.B Auction Date (YYYY-MM-DD; mandatory only when requireDate is true, e.g., new auctions,
+  // while always validating calendar format if any non-empty value is supplied)
+  const rawDate = String(draft.auctionDate ?? '').trim();
+  if (!rawDate) {
+    if (options.requireDate) {
+      pushError(
+        'auctionDate',
+        isAr ? 'تاريخ المزاد' : 'Auction Date',
+        isAr
+          ? 'يرجى تحديد تاريخ المزاد بصيغة صحيحة.'
+          : 'Please select a valid auction date.'
+      );
+    }
+  } else if (!isValidIsoDate(rawDate)) {
+    pushError(
+      'auctionDate',
+      isAr ? 'تاريخ المزاد' : 'Auction Date',
+      isAr
+        ? 'تاريخ المزاد غير صالح. يرجى اختيار يوم وشهر وسنة صحيحين.'
+        : 'Invalid auction date. Please enter a valid calendar date.'
+    );
   }
 
   // 2. Duration (Arabic primary if required)

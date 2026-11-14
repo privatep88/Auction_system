@@ -9,6 +9,7 @@ import {
   Loader2,
   Gavel,
   ShieldCheck,
+  CalendarDays,
 } from 'lucide-react';
 import {
   AuctionRecord,
@@ -18,11 +19,18 @@ import {
   ReportingPeriod,
 } from '../types/auction';
 import {
+  getCurrentUaePeriod,
   getMonthName,
   MigrationSummaryReport,
   VerificationTestResult,
   runMigrationAndDateVerificationSuite,
 } from '../services/storageService';
+import {
+  formatAuctionDateDisplay,
+  getDefaultUaeTodayIso,
+  normalizeIsoDate,
+  parseIsoDateParts,
+} from '../utils/auctionDateUtils';
 import {
   AppDialog,
   ConfirmationDialog,
@@ -43,7 +51,10 @@ interface AuctionFormModalProps {
   existingAuctions: AuctionRecord[];
   lang: Language;
   onClose: () => void;
-  onSave: (record: AuctionRecord) => void | Promise<void>;
+  onSave: (
+    record: AuctionRecord,
+    targetPeriodOverride?: ReportingPeriod
+  ) => boolean | void | Promise<boolean | void>;
 }
 
 export const AuctionFormModal: React.FC<AuctionFormModalProps> = ({
@@ -58,9 +69,10 @@ export const AuctionFormModal: React.FC<AuctionFormModalProps> = ({
 }) => {
   const isAr = lang === 'ar';
   const monthLabel = getMonthName(selectedPeriod.month, lang);
-  const { showError } = useNotification();
+  const { showError, confirmAction } = useNotification();
 
   const [auctionNumber, setAuctionNumber] = useState('');
+  const [auctionDate, setAuctionDate] = useState('');
   const [durationAr, setDurationAr] = useState('أسبوع (7 أيام)');
   const [durationEn, setDurationEn] = useState('1 Week (7 Days)');
   const [listedInput, setListedInput] = useState<string>('250');
@@ -75,6 +87,11 @@ export const AuctionFormModal: React.FC<AuctionFormModalProps> = ({
   const [hasSubmitted, setHasSubmitted] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
 
+  const uaeCurrentPeriod = getCurrentUaePeriod();
+  const isSelectedPeriodCurrentMonth =
+    uaeCurrentPeriod.year === selectedPeriod.year &&
+    uaeCurrentPeriod.month === selectedPeriod.month;
+
   useEffect(() => {
     if (!isOpen) return;
     setTouched({});
@@ -83,6 +100,7 @@ export const AuctionFormModal: React.FC<AuctionFormModalProps> = ({
 
     if (mode === 'edit' && initialRecord) {
       setAuctionNumber(initialRecord.auctionNumber);
+      setAuctionDate(initialRecord.auctionDate || '');
       setDurationAr(initialRecord.durationAr);
       setDurationEn(initialRecord.durationEn);
       setListedInput(String(initialRecord.listedVehicles));
@@ -96,7 +114,12 @@ export const AuctionFormModal: React.FC<AuctionFormModalProps> = ({
     } else {
       const nextNum = existingAuctions.length + 1;
       const padded = String(nextNum).padStart(3, '0');
+      const nowUae = getCurrentUaePeriod();
+      const matchesCurrentMonth =
+        nowUae.year === selectedPeriod.year &&
+        nowUae.month === selectedPeriod.month;
       setAuctionNumber(`AUC-${padded}`);
+      setAuctionDate(matchesCurrentMonth ? getDefaultUaeTodayIso() : '');
       setDurationAr('أسبوع (7 أيام)');
       setDurationEn('1 Week (7 Days)');
       setListedInput('250');
@@ -108,7 +131,14 @@ export const AuctionFormModal: React.FC<AuctionFormModalProps> = ({
       setRecommendationsAr('تعزيز الترويج وتنظيم المعاينة.');
       setRecommendationsEn('Enhance marketing and organize inspection.');
     }
-  }, [isOpen, mode, initialRecord, existingAuctions.length]);
+  }, [
+    isOpen,
+    mode,
+    initialRecord,
+    existingAuctions.length,
+    selectedPeriod.year,
+    selectedPeriod.month,
+  ]);
 
   const parsedListed = Number(listedInput);
   const parsedSold = Number(soldInput);
@@ -126,6 +156,7 @@ export const AuctionFormModal: React.FC<AuctionFormModalProps> = ({
     {
       id: mode === 'edit' ? initialRecord?.id : undefined,
       auctionNumber,
+      auctionDate,
       durationAr,
       durationEn,
       listedVehicles: listedInput,
@@ -139,6 +170,7 @@ export const AuctionFormModal: React.FC<AuctionFormModalProps> = ({
       lang,
       periodLabel: `${monthLabel} ${selectedPeriod.year}`,
       requireDuration: true,
+      requireDate: mode === 'add',
     }
   );
 
@@ -178,26 +210,89 @@ export const AuctionFormModal: React.FC<AuctionFormModalProps> = ({
     const finalUnsoldRate = Number(((finalUnsold / finalListed) * 100).toFixed(1));
 
     const now = new Date().toISOString();
-    const targetYear =
+    const baseYear =
       mode === 'edit' && initialRecord
         ? initialRecord.year
         : selectedPeriod.year;
-    const targetMonth =
+    const baseMonth =
       mode === 'edit' && initialRecord
         ? initialRecord.month
         : selectedPeriod.month;
+
+    const cleanIsoDate = normalizeIsoDate(auctionDate);
+    const dateParts = parseIsoDateParts(cleanIsoDate);
+
+    let targetPeriodOverride: ReportingPeriod | undefined;
+    if (
+      dateParts &&
+      (dateParts.year !== baseYear || dateParts.month !== baseMonth)
+    ) {
+      const targetMonthName = getMonthName(dateParts.month, lang);
+      const currentPeriodName = `${getMonthName(baseMonth, lang)} ${baseYear}`;
+      const targetPeriodName = `${targetMonthName} ${dateParts.year}`;
+      const formattedDate = formatAuctionDateDisplay(cleanIsoDate, lang);
+
+      const confirmedMove = await confirmAction({
+        title: isAr
+          ? 'تاريخ المزاد يقع ضمن شهر آخر'
+          : 'Auction Date Falls in Another Month',
+        message: isAr
+          ? `التاريخ المحدد للمزاد (${formattedDate}) يتبع شهر ${targetPeriodName}، بينما الفترة المفتوحة حالياً هي ${currentPeriodName}. هل ترغب في ${
+              mode === 'edit' ? 'نقل وحفظ' : 'حفظ'
+            } المزاد (${auctionNumber.trim().toUpperCase()}) تلقائياً ضمن أرشيف ${targetPeriodName}؟`
+          : `The selected auction date (${formattedDate}) belongs to ${targetPeriodName}, while the currently active period is ${currentPeriodName}. Do you want to ${
+              mode === 'edit' ? 'move and save' : 'save'
+            } auction (${auctionNumber.trim().toUpperCase()}) in ${targetPeriodName}?`,
+        confirmText: isAr
+          ? `حفظ في ${targetPeriodName}`
+          : `Save in ${targetPeriodName}`,
+        cancelText: isAr ? 'العودة لتعديل التاريخ' : 'Return to Edit Date',
+        destructive: false,
+        impactMeta: {
+          operationName:
+            mode === 'edit'
+              ? isAr
+                ? 'نقل سجل مزاد إلى الفترة المطابقة لتاريخه'
+                : 'Move Auction to Date Period'
+              : isAr
+              ? 'حفظ مزاد جديد في الفترة المطابقة لتاريخه'
+              : 'Save Auction in Date Period',
+          periodLabel: isAr
+            ? `الفترة الحالية: ${currentPeriodName} ← الوجهة: ${targetPeriodName}`
+            : `Current: ${currentPeriodName} → Target: ${targetPeriodName}`,
+          affectedCountLabel: `${auctionNumber.trim().toUpperCase()} (${formattedDate})`,
+          impactDescription: isAr
+            ? `سيُحفظ السجل بكافة أرقامه وملاحظاته ومعرّفه الأصلي في ${targetPeriodName} وتُحدَّث مؤشرات الفترتين تلقائياً.`
+            : `Preserves the record ID and all values in ${targetPeriodName} and updates KPIs for both periods automatically.`,
+          reversibilityLabel: isAr
+            ? 'يمكنك تعديل التاريخ لاحقاً لإعادة ربط السجل بأي شهر آخر.'
+            : 'Reversible anytime by editing the auction date.',
+        },
+      });
+      if (!confirmedMove) {
+        return;
+      }
+      targetPeriodOverride = {
+        year: dateParts.year,
+        month: dateParts.month,
+      };
+    }
+
+    const finalYear = targetPeriodOverride?.year ?? baseYear;
+    const finalMonth = targetPeriodOverride?.month ?? baseMonth;
 
     const record: AuctionRecord = {
       id:
         mode === 'edit' && initialRecord
           ? initialRecord.id
-          : `auc-${targetYear}-${String(targetMonth).padStart(
+          : `auc-${finalYear}-${String(finalMonth).padStart(
               2,
               '0'
             )}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-      year: targetYear,
-      month: targetMonth,
+      year: finalYear,
+      month: finalMonth,
       auctionNumber: auctionNumber.trim().toUpperCase(),
+      ...(cleanIsoDate ? { auctionDate: cleanIsoDate } : {}),
       durationAr: durationAr.trim() || 'أسبوع (7 أيام)',
       durationEn: durationEn.trim() || durationAr.trim() || '1 Week (7 Days)',
       listedVehicles: finalListed,
@@ -219,16 +314,23 @@ export const AuctionFormModal: React.FC<AuctionFormModalProps> = ({
 
     try {
       setIsSaving(true);
-      await onSave(record);
+      await onSave(record, targetPeriodOverride);
     } finally {
       setIsSaving(false);
     }
   };
 
   const errAuction = visibleFieldError('auctionNumber');
+  const errDate = visibleFieldError('auctionDate');
   const errDuration = visibleFieldError('durationAr');
   const errListed = visibleFieldError('listedVehicles');
   const errSold = visibleFieldError('soldVehicles');
+  const cleanPreviewDate = normalizeIsoDate(auctionDate);
+  const parsedDateParts = parseIsoDateParts(cleanPreviewDate);
+  const dateDiffersFromPeriod =
+    Boolean(parsedDateParts) &&
+    (parsedDateParts!.year !== selectedPeriod.year ||
+      parsedDateParts!.month !== selectedPeriod.month);
 
   return (
     <AppDialog
@@ -264,7 +366,7 @@ export const AuctionFormModal: React.FC<AuctionFormModalProps> = ({
           </div>
         )}
 
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
           <div>
             <label className="block text-xs font-extrabold text-[#123B70] mb-1">
               {isAr ? 'رقم المزاد *' : 'Auction Number *'}
@@ -287,6 +389,72 @@ export const AuctionFormModal: React.FC<AuctionFormModalProps> = ({
                 {errAuction}
               </p>
             )}
+          </div>
+
+          <div>
+            <div className="flex items-center justify-between gap-2 mb-1">
+              <label className="flex items-center gap-1.5 text-xs font-extrabold text-[#123B70]">
+                <CalendarDays className="w-3.5 h-3.5 text-[#175A9C]" />
+                <span>
+                  {mode === 'add'
+                    ? isAr
+                      ? 'تاريخ المزاد *'
+                      : 'Auction Date *'
+                    : isAr
+                    ? 'تاريخ المزاد'
+                    : 'Auction Date'}
+                </span>
+              </label>
+              <span className="text-[10.5px] font-bold px-2 py-0.5 rounded-md bg-[#EEF3F9] text-[#123B70] border border-[#CBD5E1] font-en tabular-nums">
+                {cleanPreviewDate
+                  ? formatAuctionDateDisplay(cleanPreviewDate, lang)
+                  : isAr
+                  ? 'غير محدد'
+                  : 'Not specified'}
+              </span>
+            </div>
+            <input
+              type="date"
+              dir="ltr"
+              value={auctionDate}
+              onChange={(e) => setAuctionDate(e.target.value)}
+              onBlur={() => markTouched('auctionDate')}
+              aria-invalid={Boolean(errDate)}
+              className={`w-full px-3 py-2 text-sm font-mono font-bold rounded-lg border focus:outline-none transition-colors ${
+                errDate
+                  ? 'border-[#C52B36] bg-red-50/70 focus:ring-2 focus:ring-[#C52B36]/25'
+                  : 'border-slate-300 bg-white focus:border-[#175A9C] focus:ring-2 focus:ring-[#175A9C]/15'
+              }`}
+            />
+            {errDate ? (
+              <p className="mt-1 text-[11px] font-bold text-[#C52B36] leading-snug">
+                {errDate}
+              </p>
+            ) : dateDiffersFromPeriod && parsedDateParts ? (
+              <p className="mt-1 text-[11px] font-bold text-[#B45309] leading-snug">
+                {isAr
+                  ? `تنبيه: هذا التاريخ يتبع شهر ${getMonthName(
+                      parsedDateParts.month,
+                      'ar'
+                    )} ${parsedDateParts.year} (سيُطلب تأكيدك قبل النقل/الحفظ).`
+                  : `Note: This date falls in ${getMonthName(
+                      parsedDateParts.month,
+                      'en'
+                    )} ${parsedDateParts.year} (confirmation will be asked).`}
+              </p>
+            ) : mode === 'add' && !isSelectedPeriodCurrentMonth && !cleanPreviewDate ? (
+              <p className="mt-1 text-[11px] font-semibold text-slate-500 leading-snug">
+                {isAr
+                  ? `الفترة المختارة: ${monthLabel} ${selectedPeriod.year} — اختر تاريخ المزاد ضمن هذه الفترة.`
+                  : `Active period: ${monthLabel} ${selectedPeriod.year} — select the auction date.`}
+              </p>
+            ) : mode === 'edit' && !cleanPreviewDate ? (
+              <p className="mt-1 text-[11px] font-semibold text-slate-500 leading-snug">
+                {isAr
+                  ? 'سجل سابق بدون تاريخ (سيعرض «غير محدد» ما لم تختر تاريخاً).'
+                  : 'Legacy record without a date (displays "Not specified" unless set).'}
+              </p>
+            ) : null}
           </div>
 
           <div>

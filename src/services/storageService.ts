@@ -17,6 +17,7 @@ import {
   ReportingPeriod,
   ReportMetadata,
 } from '../types/auction';
+import { normalizeIsoDate } from '../utils/auctionDateUtils';
 
 const STORAGE_KEYS = {
   LEGACY_AUCTIONS: 'saaed_auction_records_v1',
@@ -341,6 +342,7 @@ export function verifyAuctionMigrationParity(
       s.notesAr !== d.notesAr ||
       s.challengesAr !== d.challengesAr ||
       s.recommendationsAr !== d.recommendationsAr ||
+      (s.auctionDate || '') !== (d.auctionDate || '') ||
       s.id === d.id // Internal database IDs must be distinct to avoid collisions
     ) {
       return {
@@ -445,11 +447,13 @@ export function normalizeAuctionRecord(
     12,
     Math.max(1, Number(input.month) || fallbackPeriod.month)
   );
+  const normalizedDate = normalizeIsoDate(input.auctionDate);
   return {
     id: input.id,
     year,
     month,
     auctionNumber: String(input.auctionNumber || '').trim().toUpperCase(),
+    ...(normalizedDate ? { auctionDate: normalizedDate } : {}),
     durationAr: input.durationAr || 'أسبوع (7 أيام)',
     durationEn: input.durationEn || '1 Week (7 Days)',
     listedVehicles: Math.max(0, Number(input.listedVehicles) || 0),
@@ -949,6 +953,85 @@ export function savePeriodAuctions(
   return normalized;
 }
 
+/**
+ * Safely moves or saves an auction record into a target reporting period matching its auctionDate.
+ * Checks for duplicate auctionNumber in the destination period before modifying either archive,
+ * preserves the internal ID and all record fields, and updates year/month consistently.
+ */
+export function reassignAuctionPeriod(params: {
+  record: AuctionRecord;
+  fromPeriod: ReportingPeriod;
+  toPeriod: ReportingPeriod;
+}): {
+  ok: boolean;
+  reason?: 'duplicate_in_target';
+  sourceAuctions?: AuctionRecord[];
+  targetAuctions?: AuctionRecord[];
+  savedRecord?: AuctionRecord;
+} {
+  const { record, fromPeriod, toPeriod } = params;
+  const targetArchive = loadPeriodData(toPeriod.year, toPeriod.month);
+  const cleanCode = record.auctionNumber.trim().toUpperCase();
+
+  const duplicateExists = targetArchive.auctions.some(
+    (a) =>
+      a.auctionNumber.trim().toUpperCase() === cleanCode && a.id !== record.id
+  );
+  if (duplicateExists) {
+    return { ok: false, reason: 'duplicate_in_target' };
+  }
+
+  const normalizedTargetRecord = normalizeAuctionRecord(
+    {
+      ...record,
+      year: toPeriod.year,
+      month: toPeriod.month,
+      auctionNumber: cleanCode,
+      updatedAt: new Date().toISOString(),
+    },
+    toPeriod
+  );
+
+  const isSamePeriod =
+    fromPeriod.year === toPeriod.year && fromPeriod.month === toPeriod.month;
+
+  let savedSourceAuctions: AuctionRecord[] | undefined;
+  if (!isSamePeriod) {
+    const sourceArchive = loadPeriodData(fromPeriod.year, fromPeriod.month);
+    const filteredSource = sourceArchive.auctions.filter(
+      (a) => a.id !== record.id
+    );
+    savedSourceAuctions = savePeriodAuctions(
+      fromPeriod.year,
+      fromPeriod.month,
+      filteredSource
+    );
+  }
+
+  const existingIdx = targetArchive.auctions.findIndex(
+    (a) => a.id === normalizedTargetRecord.id
+  );
+  const nextTargetList =
+    existingIdx >= 0
+      ? targetArchive.auctions.map((a) =>
+          a.id === normalizedTargetRecord.id ? normalizedTargetRecord : a
+        )
+      : [...targetArchive.auctions, normalizedTargetRecord];
+
+  const savedTargetAuctions = savePeriodAuctions(
+    toPeriod.year,
+    toPeriod.month,
+    nextTargetList
+  );
+
+  return {
+    ok: true,
+    sourceAuctions: savedSourceAuctions ?? savedTargetAuctions,
+    targetAuctions: savedTargetAuctions,
+    savedRecord: normalizedTargetRecord,
+  };
+}
+
 export function savePeriodMetadata(
   year: number,
   month: number,
@@ -1004,6 +1087,14 @@ export function getArchivedPeriodsSummary(): {
 // CLOUD SYNC (Firebase Firestore: auctionReports/{YYYY-MM}/auctions/{auctionId})
 // ============================================================================
 
+function sanitizeForFirestore(rec: AuctionRecord): Record<string, unknown> {
+  const payload: Record<string, unknown> = { ...rec };
+  if (!payload.auctionDate) {
+    delete payload.auctionDate;
+  }
+  return payload;
+}
+
 export async function syncPeriodWithCloud(
   year: number,
   month: number,
@@ -1032,7 +1123,7 @@ export async function syncPeriodWithCloud(
         for (const rec of localRecords) {
           await setDoc(
             doc(firestoreDb, 'auctionReports', periodKey, 'auctions', rec.id),
-            rec
+            sanitizeForFirestore(rec)
           );
         }
       }
@@ -1065,7 +1156,7 @@ export async function persistSingleAuctionToCloud(
   try {
     await setDoc(
       doc(firestoreDb, 'auctionReports', periodKey, 'auctions', record.id),
-      record
+      sanitizeForFirestore(record)
     );
     return true;
   } catch {

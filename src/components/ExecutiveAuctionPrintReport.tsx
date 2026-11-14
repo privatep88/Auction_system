@@ -32,6 +32,7 @@ import {
   evaluateAuctionPerformance,
   getMonthName,
 } from '../services/storageService';
+import { formatAuctionDateDisplay } from '../utils/auctionDateUtils';
 import {
   GoldenGavelIcon,
   NavyCarIcon,
@@ -1261,22 +1262,25 @@ export const ExecutiveAuctionPrintReport: React.FC<
                     }}
                     className="text-white text-[12.5px] font-extrabold"
                   >
-                    <th className="py-2.5 px-2 border border-[#24528A] w-[42px]">
+                    <th className="py-2.5 px-2 border border-[#24528A] w-[40px]">
                       {isAr ? 'م' : '#'}
                     </th>
-                    <th className="py-2.5 px-2.5 border border-[#24528A] w-[96px] whitespace-nowrap">
+                    <th className="py-2.5 px-2 border border-[#24528A] w-[92px] whitespace-nowrap">
                       {isAr ? 'رقم المزاد' : 'Auction ID'}
                     </th>
-                    <th className="py-2.5 px-2.5 border border-[#24528A] w-[115px] whitespace-nowrap">
+                    <th className="py-2.5 px-2 border border-[#24528A] w-[100px] whitespace-nowrap">
+                      {isAr ? 'تاريخ المزاد' : 'Auction Date'}
+                    </th>
+                    <th className="py-2.5 px-2 border border-[#24528A] w-[108px] whitespace-nowrap">
                       {isAr ? 'مدة عرض المزاد' : 'Duration'}
                     </th>
-                    <th className="py-2.5 px-2 border border-[#24528A] w-[92px] whitespace-nowrap">
+                    <th className="py-2.5 px-2 border border-[#24528A] w-[88px] whitespace-nowrap">
                       {isAr ? 'المركبات المدرجة' : 'Listed'}
                     </th>
-                    <th className="py-2.5 px-2 border border-[#24528A] w-[92px] whitespace-nowrap">
+                    <th className="py-2.5 px-2 border border-[#24528A] w-[88px] whitespace-nowrap">
                       {isAr ? 'المركبات المبيعة' : 'Sold'}
                     </th>
-                    <th className="py-2.5 px-2 border border-[#24528A] w-[96px] whitespace-nowrap">
+                    <th className="py-2.5 px-2 border border-[#24528A] w-[90px] whitespace-nowrap">
                       {isAr ? 'غير المبيعة' : 'Unsold'}
                     </th>
                     <th className="py-2.5 px-3 border border-[#24528A]">
@@ -1297,7 +1301,7 @@ export const ExecutiveAuctionPrintReport: React.FC<
                   {chunk.length === 0 ? (
                     <tr>
                       <td
-                        colSpan={9}
+                        colSpan={10}
                         className="py-16 text-center text-[14px] font-extrabold text-[#64748B]"
                       >
                         {isAr
@@ -1316,12 +1320,23 @@ export const ExecutiveAuctionPrintReport: React.FC<
                         <td className="py-2.5 px-2 border border-[#CBD5E1] font-en font-black tabular-nums">
                           {startRowNumber + idx}
                         </td>
-                        <td className="py-2.5 px-2.5 border border-[#CBD5E1]">
+                        <td className="py-2.5 px-2 border border-[#CBD5E1] whitespace-nowrap">
                           <span className="auction-id font-en font-black text-[#123B70] text-[12.5px]">
                             {auc.auctionNumber}
                           </span>
                         </td>
-                        <td className="py-2.5 px-2.5 border border-[#CBD5E1] font-extrabold">
+                        <td className="py-2.5 px-2 border border-[#CBD5E1] whitespace-nowrap">
+                          {auc.auctionDate ? (
+                            <span className="font-en font-extrabold tabular-nums text-[#14243D]">
+                              {formatAuctionDateDisplay(auc.auctionDate, lang)}
+                            </span>
+                          ) : (
+                            <span className="text-[#64748B] font-bold text-[11px]">
+                              {formatAuctionDateDisplay(undefined, lang)}
+                            </span>
+                          )}
+                        </td>
+                        <td className="py-2.5 px-2 border border-[#CBD5E1] font-extrabold">
                           {isAr ? auc.durationAr : auc.durationEn}
                         </td>
                         <td className="py-2.5 px-2 border border-[#CBD5E1] font-en font-black tabular-nums text-[13px]">
@@ -1355,7 +1370,7 @@ export const ExecutiveAuctionPrintReport: React.FC<
                       className="bg-[#123B70] text-white font-black text-[13.5px]"
                     >
                       <td
-                        colSpan={3}
+                        colSpan={4}
                         className="py-2.5 px-4 border border-[#123B70] text-center"
                       >
                         {isAr ? 'الإجمالي العام للشهر' : 'Monthly Grand Total'}
@@ -1458,25 +1473,28 @@ export const ExecutiveAuctionPrintReport: React.FC<
                       style={{ lineHeight: 1.5, letterSpacing: '0px' }}
                       className="bg-[#123B70] text-white font-extrabold"
                     >
-                      <th className="py-2 px-3 border border-[#24528A]">
+                      <th className="py-2 px-2.5 border border-[#24528A] whitespace-nowrap">
                         {isAr ? 'رقم المزاد' : 'Auction ID'}
                       </th>
-                      <th className="py-2 px-3 border border-[#24528A]">
+                      <th className="py-2 px-2.5 border border-[#24528A] whitespace-nowrap">
+                        {isAr ? 'تاريخ المزاد' : 'Auction Date'}
+                      </th>
+                      <th className="py-2 px-2.5 border border-[#24528A] whitespace-nowrap">
                         {isAr ? 'المركبات المدرجة' : 'Listed Vehicles'}
                       </th>
-                      <th className="py-2 px-3 border border-[#24528A]">
+                      <th className="py-2 px-2.5 border border-[#24528A] whitespace-nowrap">
                         {isAr ? 'المركبات المبيعة' : 'Sold Vehicles'}
                       </th>
-                      <th className="py-2 px-3 border border-[#24528A]">
+                      <th className="py-2 px-2.5 border border-[#24528A] whitespace-nowrap">
                         {isAr ? 'المركبات غير المبيعة' : 'Unsold Vehicles'}
                       </th>
-                      <th className="py-2 px-3 border border-[#24528A]">
+                      <th className="py-2 px-2.5 border border-[#24528A] whitespace-nowrap">
                         {isAr ? 'نسبة البيع' : 'Sale Rate'}
                       </th>
-                      <th className="py-2 px-3 border border-[#24528A]">
+                      <th className="py-2 px-2.5 border border-[#24528A] whitespace-nowrap">
                         {isAr ? 'نسبة عدم البيع' : 'Unsold Rate'}
                       </th>
-                      <th className="py-2 px-3 border border-[#24528A]">
+                      <th className="py-2 px-2.5 border border-[#24528A] whitespace-nowrap">
                         {isAr ? 'تقييم الأداء' : 'Performance Evaluation'}
                       </th>
                     </tr>
@@ -1488,7 +1506,7 @@ export const ExecutiveAuctionPrintReport: React.FC<
                     {compChunk.length === 0 ? (
                       <tr>
                         <td
-                          colSpan={7}
+                          colSpan={8}
                           className="py-8 text-center text-[#64748B]"
                         >
                           {isAr
@@ -1510,10 +1528,21 @@ export const ExecutiveAuctionPrintReport: React.FC<
                               i % 2 === 0 ? 'bg-white' : 'bg-[#F8FAFC]'
                             }
                           >
-                            <td className="py-1.5 px-3 border border-[#CBD5E1]">
+                            <td className="py-1.5 px-2.5 border border-[#CBD5E1] whitespace-nowrap">
                               <span className="auction-id font-en font-black text-[#123B70]">
                                 {auc.auctionNumber}
                               </span>
+                            </td>
+                            <td className="py-1.5 px-2.5 border border-[#CBD5E1] whitespace-nowrap">
+                              {auc.auctionDate ? (
+                                <span className="font-en font-extrabold tabular-nums text-[#14243D]">
+                                  {formatAuctionDateDisplay(auc.auctionDate, lang)}
+                                </span>
+                              ) : (
+                                <span className="text-[#64748B] font-bold text-[11px]">
+                                  {formatAuctionDateDisplay(undefined, lang)}
+                                </span>
+                              )}
                             </td>
                             <td className="py-1.5 px-3 border border-[#CBD5E1] font-en tabular-nums font-extrabold">
                               {auc.listedVehicles.toLocaleString('en-US')}

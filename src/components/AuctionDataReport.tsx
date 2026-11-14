@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import {
   Calendar,
+  CalendarDays,
   FileText,
   AlertTriangle,
   Lightbulb,
@@ -22,6 +23,12 @@ import {
   ReportMetadata,
 } from '../types/auction';
 import { getMonthName } from '../services/storageService';
+import {
+  compareAuctionDates,
+  formatAuctionDateDisplay,
+  normalizeIsoDate,
+  parseIsoDateParts,
+} from '../utils/auctionDateUtils';
 import {
   GoldenGavelIcon,
   NavyCarIcon,
@@ -55,7 +62,10 @@ interface AuctionDataReportProps {
   onOpenAddModal: () => void;
   onOpenEditModal: (record: AuctionRecord) => void;
   onDeleteAuction: (record: AuctionRecord) => void;
-  onInlineSaveAuction: (record: AuctionRecord) => { ok: boolean; error?: string };
+  onInlineSaveAuction: (
+    record: AuctionRecord,
+    targetPeriodOverride?: ReportingPeriod
+  ) => { ok: boolean; error?: string } | Promise<{ ok: boolean; error?: string }>;
   onInlineDirtyChange?: (isDirty: boolean) => void;
   onSwitchToSheet2?: () => void;
   migrationState?: 'pending_approval' | 'completed';
@@ -65,6 +75,7 @@ interface AuctionDataReportProps {
 type SortField =
   | 'index'
   | 'auctionNumber'
+  | 'auctionDate'
   | 'listedVehicles'
   | 'soldVehicles'
   | 'unsoldVehicles'
@@ -101,6 +112,8 @@ export const AuctionDataReport: React.FC<AuctionDataReportProps> = ({
 
   const { showError, confirmAction } = useNotification();
   const [searchQuery, setSearchQuery] = useState('');
+  const [dateFilterFrom, setDateFilterFrom] = useState('');
+  const [dateFilterTo, setDateFilterTo] = useState('');
   const [sortField, setSortField] = useState<SortField>('index');
   const [sortAsc, setSortAsc] = useState<boolean>(true);
   const [editingDateField, setEditingDateField] = useState<
@@ -113,7 +126,7 @@ export const AuctionDataReport: React.FC<AuctionDataReportProps> = ({
   const [inlineSoldRaw, setInlineSoldRaw] = useState<string>('');
   const [inlineSubmitted, setInlineSubmitted] = useState<boolean>(false);
 
-  // Reset inline edit state when selectedPeriod changes
+  // Reset inline edit state and date filter when selectedPeriod changes
   useEffect(() => {
     setInlineEditId(null);
     setInlineDraft(null);
@@ -121,6 +134,8 @@ export const AuctionDataReport: React.FC<AuctionDataReportProps> = ({
     setInlineSoldRaw('');
     setInlineSubmitted(false);
     setEditingDateField(null);
+    setDateFilterFrom('');
+    setDateFilterTo('');
     onInlineDirtyChange?.(false);
   }, [selectedPeriod.year, selectedPeriod.month]);
 
@@ -166,10 +181,21 @@ export const AuctionDataReport: React.FC<AuctionDataReportProps> = ({
   const filteredAuctions = auctions
     .map((item, idx) => ({ item, originalIndex: idx + 1 }))
     .filter(({ item }) => {
+      if (dateFilterFrom || dateFilterTo) {
+        const itemIso = normalizeIsoDate(item.auctionDate);
+        if (!itemIso) return false;
+        if (dateFilterFrom && itemIso < dateFilterFrom) return false;
+        if (dateFilterTo && itemIso > dateFilterTo) return false;
+      }
       if (!searchQuery.trim()) return true;
       const q = searchQuery.toLowerCase();
+      const dateDispAr = formatAuctionDateDisplay(item.auctionDate, 'ar').toLowerCase();
+      const dateDispEn = formatAuctionDateDisplay(item.auctionDate, 'en').toLowerCase();
       return (
         item.auctionNumber.toLowerCase().includes(q) ||
+        (item.auctionDate || '').toLowerCase().includes(q) ||
+        dateDispAr.includes(q) ||
+        dateDispEn.includes(q) ||
         item.durationAr.toLowerCase().includes(q) ||
         item.durationEn.toLowerCase().includes(q) ||
         item.notesAr.toLowerCase().includes(q) ||
@@ -181,6 +207,14 @@ export const AuctionDataReport: React.FC<AuctionDataReportProps> = ({
       );
     })
     .sort((a, b) => {
+      if (sortField === 'auctionDate') {
+        const dateCmp = compareAuctionDates(
+          a.item.auctionDate,
+          b.item.auctionDate,
+          sortAsc
+        );
+        return dateCmp !== 0 ? dateCmp : a.originalIndex - b.originalIndex;
+      }
       let cmp = 0;
       if (sortField === 'index') cmp = a.originalIndex - b.originalIndex;
       else if (sortField === 'auctionNumber')
@@ -237,6 +271,7 @@ export const AuctionDataReport: React.FC<AuctionDataReportProps> = ({
         {
           id: inlineDraft.id,
           auctionNumber: inlineDraft.auctionNumber,
+          auctionDate: inlineDraft.auctionDate || '',
           durationAr: inlineDraft.durationAr,
           durationEn: inlineDraft.durationEn,
           listedVehicles: inlineListedRaw,
@@ -247,11 +282,12 @@ export const AuctionDataReport: React.FC<AuctionDataReportProps> = ({
           lang,
           periodLabel: `${currentMonthLabel} ${selectedPeriod.year}`,
           requireDuration: true,
+          requireDate: false,
         }
       )
     : null;
 
-  const saveInlineEdit = () => {
+  const saveInlineEdit = async () => {
     if (!inlineDraft || !inlineValidation) return;
     setInlineSubmitted(true);
 
@@ -272,11 +308,52 @@ export const AuctionDataReport: React.FC<AuctionDataReportProps> = ({
       return;
     }
 
-    const res = onInlineSaveAuction({
+    const cleanIsoDate = normalizeIsoDate(inlineDraft.auctionDate);
+    const dateParts = parseIsoDateParts(cleanIsoDate);
+    let targetPeriodOverride: ReportingPeriod | undefined;
+
+    if (
+      dateParts &&
+      (dateParts.year !== selectedPeriod.year ||
+        dateParts.month !== selectedPeriod.month)
+    ) {
+      const targetPeriodName = `${getMonthName(dateParts.month, lang)} ${
+        dateParts.year
+      }`;
+      const currentPeriodName = `${currentMonthLabel} ${selectedPeriod.year}`;
+      const formattedDate = formatAuctionDateDisplay(cleanIsoDate, lang);
+      const confirmedMove = await confirmAction({
+        title: isAr
+          ? 'تاريخ المزاد يقع ضمن شهر آخر'
+          : 'Auction Date Falls in Another Month',
+        message: isAr
+          ? `التاريخ المحدد (${formattedDate}) يتبع شهر ${targetPeriodName}، بينما الفترة المفتوحة هي ${currentPeriodName}. هل ترغب في نقل وحفظ المزاد (${inlineDraft.auctionNumber.trim().toUpperCase()}) إلى ${targetPeriodName}؟`
+          : `Date (${formattedDate}) falls in ${targetPeriodName}, while current period is ${currentPeriodName}. Move and save (${inlineDraft.auctionNumber.trim().toUpperCase()}) to ${targetPeriodName}?`,
+        confirmText: isAr
+          ? `نقل وحفظ في ${targetPeriodName}`
+          : `Move & Save to ${targetPeriodName}`,
+        cancelText: isAr ? 'العودة لتعديل التاريخ' : 'Return to Edit',
+        destructive: false,
+      });
+      if (!confirmedMove) return;
+      targetPeriodOverride = {
+        year: dateParts.year,
+        month: dateParts.month,
+      };
+    }
+
+    const nextDraft: AuctionRecord = {
       ...inlineDraft,
       listedVehicles: Number(inlineListedRaw),
       soldVehicles: Number(inlineSoldRaw),
-    });
+    };
+    if (cleanIsoDate) {
+      nextDraft.auctionDate = cleanIsoDate;
+    } else {
+      delete nextDraft.auctionDate;
+    }
+
+    const res = await onInlineSaveAuction(nextDraft, targetPeriodOverride);
     if (!res.ok) {
       showError({
         title: isAr ? 'تعذر حفظ تعديلات الصف' : 'Unable to Save Row Edits',
@@ -560,8 +637,8 @@ export const AuctionDataReport: React.FC<AuctionDataReportProps> = ({
       {/* OPTIONAL INTERACTIVE SEARCH & QUICK ACTION BAR (Hidden in Pixel-Perfect Mode & Print) */}
       {!pixelPerfectMode && (
         <div className="no-print mb-2.5 flex flex-wrap items-center justify-between gap-2 bg-white/90 border border-[#CBD5E1] rounded-xl px-3 py-1.5">
-          <div className="flex items-center gap-2 flex-1 min-w-[220px]">
-            <div className="relative flex-1 max-w-sm">
+          <div className="flex flex-wrap items-center gap-2 flex-1 min-w-[260px]">
+            <div className="relative flex-1 min-w-[180px] max-w-xs">
               <Search className="w-4 h-4 text-slate-400 absolute top-1/2 -translate-y-1/2 start-3 pointer-events-none" />
               <input
                 type="text"
@@ -575,7 +652,46 @@ export const AuctionDataReport: React.FC<AuctionDataReportProps> = ({
                 className="w-full ps-9 pe-3 py-1 text-xs font-semibold bg-[#F8FAFC] border border-[#CBD5E1] rounded-lg focus:outline-none focus:border-[#165B9D]"
               />
             </div>
-            <span className="text-[11px] font-semibold text-slate-500 hidden sm:inline">
+
+            {/* Date Range Filter */}
+            <div className="flex items-center gap-1.5 bg-[#F8FAFC] border border-[#CBD5E1] rounded-lg px-2 py-0.5 text-[11px] font-bold text-[#123B70]">
+              <CalendarDays className="w-3.5 h-3.5 text-[#175A9C] shrink-0" />
+              <span className="hidden md:inline whitespace-nowrap">
+                {isAr ? 'من:' : 'From:'}
+              </span>
+              <input
+                type="date"
+                dir="ltr"
+                value={dateFilterFrom}
+                onChange={(e) => setDateFilterFrom(e.target.value)}
+                aria-label={isAr ? 'تصفية من تاريخ' : 'Filter from date'}
+                className="bg-transparent text-[11px] font-mono font-bold text-[#0F294A] focus:outline-none"
+              />
+              <span className="whitespace-nowrap">{isAr ? 'إلى:' : 'To:'}</span>
+              <input
+                type="date"
+                dir="ltr"
+                value={dateFilterTo}
+                onChange={(e) => setDateFilterTo(e.target.value)}
+                aria-label={isAr ? 'تصفية إلى تاريخ' : 'Filter to date'}
+                className="bg-transparent text-[11px] font-mono font-bold text-[#0F294A] focus:outline-none"
+              />
+              {(dateFilterFrom || dateFilterTo) && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setDateFilterFrom('');
+                    setDateFilterTo('');
+                  }}
+                  title={isAr ? 'مسح تصفية التاريخ' : 'Clear date filter'}
+                  className="p-0.5 text-[#C52B36] hover:bg-red-50 rounded cursor-pointer"
+                >
+                  <X className="w-3 h-3" />
+                </button>
+              )}
+            </div>
+
+            <span className="text-[11px] font-semibold text-slate-500 hidden xl:inline">
               {isAr
                 ? 'تلميح: انقر مرتين على أي صف للتعديل السريع المباشر'
                 : 'Tip: Double-click any row for quick inline editing'}
@@ -611,21 +727,37 @@ export const AuctionDataReport: React.FC<AuctionDataReportProps> = ({
 
       {/* 3. MAIN AUCTION DATA TABLE */}
       <div className="w-full overflow-x-auto rounded-[10px] border border-[#8FA3B8] shadow-xs bg-white">
-        <table className="w-full border-collapse text-right min-w-[980px]">
+        <table
+          className="w-full table-fixed border-collapse text-center min-w-[1100px]"
+          dir={isAr ? 'rtl' : 'ltr'}
+        >
+          <colgroup>
+            <col style={{ width: '3%' }} />
+            <col style={{ width: '8%' }} />
+            <col style={{ width: '9%' }} />
+            <col style={{ width: pixelPerfectMode ? '9.5%' : '9%' }} />
+            <col style={{ width: '7.5%' }} />
+            <col style={{ width: '7.5%' }} />
+            <col style={{ width: '7.5%' }} />
+            <col style={{ width: pixelPerfectMode ? '15%' : '14%' }} />
+            <col style={{ width: pixelPerfectMode ? '15.5%' : '14%' }} />
+            <col style={{ width: pixelPerfectMode ? '17.5%' : '16%' }} />
+            {!pixelPerfectMode && <col style={{ width: '4.5%' }} />}
+          </colgroup>
           <thead>
             <tr
               style={{
                 background:
                   'linear-gradient(180deg, #165B9D 0%, #123B70 65%, #0E315E 100%)',
               }}
-              className="text-white text-[13px] sm:text-[14px] font-extrabold select-none"
+              className="text-white text-[12.5px] sm:text-[13.5px] font-extrabold select-none"
             >
               {/* 1. م */}
               <th
                 onClick={() => handleSort('index')}
-                className="py-2 px-2 border border-[#4978A8] text-center w-[3.8%] cursor-pointer hover:bg-white/10 transition-colors"
+                className="box-border align-middle py-2.5 px-1.5 border border-[#4978A8] text-center cursor-pointer hover:bg-white/10 transition-colors"
               >
-                <div className="flex items-center justify-center gap-1">
+                <div className="flex items-center justify-center gap-1 whitespace-nowrap">
                   <span>{isAr ? 'م' : '#'}</span>
                 </div>
               </th>
@@ -633,33 +765,44 @@ export const AuctionDataReport: React.FC<AuctionDataReportProps> = ({
               {/* 2. رقم المزاد */}
               <th
                 onClick={() => handleSort('auctionNumber')}
-                className="py-2 px-2.5 border border-[#4978A8] text-center w-[9%] cursor-pointer hover:bg-white/10 transition-colors"
+                className="box-border align-middle py-2.5 px-1.5 border border-[#4978A8] text-center cursor-pointer hover:bg-white/10 transition-colors"
               >
-                <div className="flex items-center justify-center gap-1.5 whitespace-nowrap">
+                <div className="flex items-center justify-center gap-1 whitespace-nowrap">
                   <span>{isAr ? 'رقم المزاد' : 'Auction No.'}</span>
-                  <Gavel className="w-4 h-4 text-white/90 shrink-0" />
+                  <Gavel className="w-3.5 h-3.5 text-white/90 shrink-0" />
                 </div>
               </th>
 
-              {/* 3. مدة عرض المزاد */}
-              <th className="py-2 px-2.5 border border-[#4978A8] text-center w-[11%]">
-                <div className="flex items-center justify-center gap-1.5 whitespace-nowrap">
+              {/* 3. تاريخ المزاد */}
+              <th
+                onClick={() => handleSort('auctionDate')}
+                className="box-border align-middle py-2.5 px-1.5 border border-[#4978A8] text-center cursor-pointer hover:bg-white/10 transition-colors"
+              >
+                <div className="flex items-center justify-center gap-1 whitespace-nowrap">
+                  <span>{isAr ? 'تاريخ المزاد' : 'Auction Date'}</span>
+                  <CalendarDays className="w-3.5 h-3.5 text-white/90 shrink-0" />
+                </div>
+              </th>
+
+              {/* 4. مدة عرض المزاد */}
+              <th className="box-border align-middle py-2.5 px-1.5 border border-[#4978A8] text-center">
+                <div className="flex items-center justify-center gap-1 leading-tight whitespace-normal 2xl:whitespace-nowrap">
                   <span>{isAr ? 'مدة عرض المزاد' : 'Auction Duration'}</span>
-                  <Calendar className="w-4 h-4 text-white/90 shrink-0" />
+                  <Calendar className="w-3.5 h-3.5 text-white/90 shrink-0" />
                 </div>
               </th>
 
-              {/* 4. عدد المركبات المدرجة */}
+              {/* 5. عدد المركبات المدرجة */}
               <th
                 onClick={() => handleSort('listedVehicles')}
-                className="py-1.5 px-2 border border-[#4978A8] text-center w-[9%] cursor-pointer hover:bg-white/10 transition-colors"
+                className="box-border align-middle py-2 px-1.5 border border-[#4978A8] text-center cursor-pointer hover:bg-white/10 transition-colors"
               >
-                <div className="flex items-center justify-center gap-1.5">
-                  <div className="leading-tight">
+                <div className="flex items-center justify-center gap-1">
+                  <div className="leading-tight whitespace-nowrap">
                     <div>{isAr ? 'عدد المركبات' : 'Listed'}</div>
                     <div>{isAr ? 'المدرجة' : 'Vehicles'}</div>
                   </div>
-                  <svg viewBox="0 0 24 24" className="w-5 h-5 fill-white shrink-0">
+                  <svg viewBox="0 0 24 24" className="w-4 h-4 fill-white shrink-0">
                     <path
                       d="M5 11L6.5 6.5C7 5.5 8 5 9 5H15C16 5 17 5.5 17.5 6.5L19 11M5 11H19M5 11V17H7V19H9V17H15V19H17V17H19V11"
                       stroke="currentColor"
@@ -670,19 +813,19 @@ export const AuctionDataReport: React.FC<AuctionDataReportProps> = ({
                 </div>
               </th>
 
-              {/* 5. عدد المركبات المبيعة */}
+              {/* 6. عدد المركبات المبيعة */}
               <th
                 onClick={() => handleSort('soldVehicles')}
-                className="py-1.5 px-2 border border-[#4978A8] text-center w-[9%] cursor-pointer hover:bg-white/10 transition-colors"
+                className="box-border align-middle py-2 px-1.5 border border-[#4978A8] text-center cursor-pointer hover:bg-white/10 transition-colors"
               >
-                <div className="flex items-center justify-center gap-1.5">
-                  <div className="leading-tight">
+                <div className="flex items-center justify-center gap-1">
+                  <div className="leading-tight whitespace-nowrap">
                     <div>{isAr ? 'عدد المركبات' : 'Sold'}</div>
                     <div>{isAr ? 'المبيعة' : 'Vehicles'}</div>
                   </div>
                   <svg
                     viewBox="0 0 24 24"
-                    className="w-5 h-5 text-white shrink-0"
+                    className="w-4 h-4 text-white shrink-0"
                     fill="none"
                   >
                     <path
@@ -708,19 +851,19 @@ export const AuctionDataReport: React.FC<AuctionDataReportProps> = ({
                 </div>
               </th>
 
-              {/* 6. عدد المركبات غير المبيعة */}
+              {/* 7. عدد المركبات غير المبيعة */}
               <th
                 onClick={() => handleSort('unsoldVehicles')}
-                className="py-1.5 px-2 border border-[#4978A8] text-center w-[9%] cursor-pointer hover:bg-white/10 transition-colors"
+                className="box-border align-middle py-2 px-1.5 border border-[#4978A8] text-center cursor-pointer hover:bg-white/10 transition-colors"
               >
-                <div className="flex items-center justify-center gap-1.5">
-                  <div className="leading-tight">
+                <div className="flex items-center justify-center gap-1">
+                  <div className="leading-tight whitespace-nowrap">
                     <div>{isAr ? 'عدد المركبات' : 'Unsold'}</div>
                     <div>{isAr ? 'غير المبيعة' : 'Vehicles'}</div>
                   </div>
                   <svg
                     viewBox="0 0 24 24"
-                    className="w-5 h-5 text-white shrink-0"
+                    className="w-4 h-4 text-white shrink-0"
                     fill="none"
                   >
                     <path
@@ -746,25 +889,25 @@ export const AuctionDataReport: React.FC<AuctionDataReportProps> = ({
                 </div>
               </th>
 
-              {/* 7. الملاحظات */}
-              <th className="py-2 px-3 border border-[#4978A8] text-center w-[16%]">
-                <div className="flex items-center justify-center gap-1.5">
+              {/* 8. الملاحظات */}
+              <th className="box-border align-middle py-2.5 px-3 border border-[#4978A8] text-center">
+                <div className="flex items-center justify-center gap-1.5 whitespace-nowrap">
                   <span>{isAr ? 'الملاحظات' : 'Operational Notes'}</span>
                   <FileText className="w-4 h-4 text-white/90 shrink-0" />
                 </div>
               </th>
 
-              {/* 8. التحديات */}
-              <th className="py-2 px-3 border border-[#4978A8] text-center w-[16%]">
-                <div className="flex items-center justify-center gap-1.5">
+              {/* 9. التحديات */}
+              <th className="box-border align-middle py-2.5 px-3 border border-[#4978A8] text-center">
+                <div className="flex items-center justify-center gap-1.5 whitespace-nowrap">
                   <span>{isAr ? 'التحديات' : 'Challenges'}</span>
                   <AlertTriangle className="w-4 h-4 text-[#FACC15] shrink-0" />
                 </div>
               </th>
 
-              {/* 9. التوصيات */}
-              <th className="py-2 px-3 border border-[#4978A8] text-center w-[17.2%]">
-                <div className="flex items-center justify-center gap-1.5">
+              {/* 10. التوصيات */}
+              <th className="box-border align-middle py-2.5 px-3.5 border border-[#4978A8] text-center">
+                <div className="flex items-center justify-center gap-1.5 whitespace-nowrap">
                   <span>{isAr ? 'التوصيات' : 'Recommendations'}</span>
                   <Lightbulb className="w-4 h-4 text-[#FDE047] shrink-0" />
                 </div>
@@ -772,8 +915,10 @@ export const AuctionDataReport: React.FC<AuctionDataReportProps> = ({
 
               {/* Optional Management Column when not in Pixel-Perfect mode */}
               {!pixelPerfectMode && (
-                <th className="no-print py-2 px-2 border border-[#4978A8] text-center w-[70px]">
-                  <span className="text-xs">{isAr ? 'إجراء' : 'Actions'}</span>
+                <th className="no-print box-border align-middle py-2.5 px-1 border border-[#4978A8] text-center">
+                  <span className="text-xs whitespace-nowrap">
+                    {isAr ? 'إجراء' : 'Actions'}
+                  </span>
                 </th>
               )}
             </tr>
@@ -783,7 +928,7 @@ export const AuctionDataReport: React.FC<AuctionDataReportProps> = ({
             {auctions.length === 0 ? (
               <tr>
                 <td
-                  colSpan={pixelPerfectMode ? 9 : 10}
+                  colSpan={pixelPerfectMode ? 10 : 11}
                   className="py-8 px-4 text-center bg-[#F8FAFC]"
                 >
                   <div className="flex flex-col items-center justify-center gap-3">
@@ -810,7 +955,7 @@ export const AuctionDataReport: React.FC<AuctionDataReportProps> = ({
             ) : filteredAuctions.length === 0 ? (
               <tr>
                 <td
-                  colSpan={pixelPerfectMode ? 9 : 10}
+                  colSpan={pixelPerfectMode ? 10 : 11}
                   className="py-6 text-center text-slate-500 font-semibold"
                 >
                   {isAr
@@ -832,6 +977,7 @@ export const AuctionDataReport: React.FC<AuctionDataReportProps> = ({
                       ? inlineValidation?.fieldErrors[field]
                       : undefined;
                   const errAuc = cellErr('auctionNumber');
+                  const errDate = cellErr('auctionDate');
                   const errDur = cellErr('durationAr');
                   const errList = cellErr('listedVehicles');
                   const errSld = cellErr('soldVehicles');
@@ -866,6 +1012,30 @@ export const AuctionDataReport: React.FC<AuctionDataReportProps> = ({
                           </div>
                         )}
                       </td>
+                      <td className="box-border align-middle py-2 px-1 border border-[#B8C4D4] text-center">
+                        <input
+                          type="date"
+                          dir="ltr"
+                          value={inlineDraft.auctionDate || ''}
+                          onChange={(e) =>
+                            setInlineDraft({
+                              ...inlineDraft,
+                              auctionDate: e.target.value || undefined,
+                            })
+                          }
+                          aria-invalid={Boolean(errDate)}
+                          className={`w-full text-center font-mono text-[11px] font-bold rounded px-0.5 py-0.5 border focus:outline-none ${
+                            errDate
+                              ? 'border-[#C52B36] bg-red-50'
+                              : 'border-[#165B9D] bg-white'
+                          }`}
+                        />
+                        {errDate && (
+                          <div className="mt-0.5 text-[10px] font-bold text-[#C52B36] leading-tight">
+                            {errDate}
+                          </div>
+                        )}
+                      </td>
                       <td className="py-1.5 px-1.5 border border-[#B8C4D4] text-center align-top">
                         <input
                           type="text"
@@ -889,7 +1059,7 @@ export const AuctionDataReport: React.FC<AuctionDataReportProps> = ({
                           </div>
                         )}
                       </td>
-                      <td className="py-1.5 px-1.5 border border-[#B8C4D4] text-center align-top">
+                      <td className="box-border align-middle py-2 px-1 border border-[#B8C4D4] text-center">
                         <input
                           type="number"
                           min={1}
@@ -897,7 +1067,7 @@ export const AuctionDataReport: React.FC<AuctionDataReportProps> = ({
                           value={inlineListedRaw}
                           onChange={(e) => setInlineListedRaw(e.target.value)}
                           aria-invalid={Boolean(errList)}
-                          className={`w-20 text-center font-mono font-bold rounded px-1 py-0.5 border focus:outline-none ${
+                          className={`w-full max-w-[74px] mx-auto text-center font-mono font-bold rounded px-1 py-0.5 border focus:outline-none ${
                             errList
                               ? 'border-[#C52B36] bg-red-50'
                               : 'border-[#165B9D] bg-white'
@@ -909,7 +1079,7 @@ export const AuctionDataReport: React.FC<AuctionDataReportProps> = ({
                           </div>
                         )}
                       </td>
-                      <td className="py-1.5 px-1.5 border border-[#B8C4D4] text-center align-top">
+                      <td className="box-border align-middle py-2 px-1 border border-[#B8C4D4] text-center">
                         <input
                           type="number"
                           min={0}
@@ -917,7 +1087,7 @@ export const AuctionDataReport: React.FC<AuctionDataReportProps> = ({
                           value={inlineSoldRaw}
                           onChange={(e) => setInlineSoldRaw(e.target.value)}
                           aria-invalid={Boolean(errSld)}
-                          className={`w-20 text-center font-mono font-bold rounded px-1 py-0.5 border focus:outline-none ${
+                          className={`w-full max-w-[74px] mx-auto text-center font-mono font-bold rounded px-1 py-0.5 border focus:outline-none ${
                             errSld
                               ? 'border-[#C52B36] bg-red-50'
                               : 'border-[#165B9D] bg-white'
@@ -999,8 +1169,8 @@ export const AuctionDataReport: React.FC<AuctionDataReportProps> = ({
                         </div>
                       </td>
                       {!pixelPerfectMode && (
-                        <td className="no-print py-1.5 px-1.5 border border-[#B8C4D4] text-center">
-                          <div className="flex items-center justify-center gap-1">
+                        <td className="no-print box-border align-middle py-2 px-1 border border-[#B8C4D4] text-center whitespace-nowrap">
+                          <div className="flex items-center justify-center gap-0.5">
                             <button
                               type="button"
                               onClick={saveInlineEdit}
@@ -1030,41 +1200,57 @@ export const AuctionDataReport: React.FC<AuctionDataReportProps> = ({
                     onDoubleClick={() => startInlineEdit(item)}
                     className={`${rowBg} hover:bg-[#DCE7F5] transition-colors border-b border-[#B8C4D4]`}
                   >
-                    <td className="py-1.5 px-2 border border-[#B8C4D4] text-center font-black tabular-nums text-[#0F172A]">
+                    <td className="box-border align-middle py-2.5 px-1.5 border border-[#B8C4D4] text-center font-black tabular-nums whitespace-nowrap text-[#0F172A]">
                       {originalIndex}
                     </td>
-                    <td className="py-1.5 px-2.5 border border-[#B8C4D4] text-center font-extrabold font-en tabular-nums text-[#0F172A]">
-                      {item.auctionNumber}
+                    <td className="box-border align-middle py-2.5 px-1.5 border border-[#B8C4D4] text-center font-extrabold font-en tabular-nums whitespace-nowrap text-[#0F172A]">
+                      <span dir="ltr" className="inline-block whitespace-nowrap">
+                        {item.auctionNumber}
+                      </span>
                     </td>
-                    <td className="py-1.5 px-2.5 border border-[#B8C4D4] text-center font-bold text-[#0F172A] whitespace-nowrap">
+                    <td className="box-border align-middle py-2.5 px-1.5 border border-[#B8C4D4] text-center whitespace-nowrap">
+                      {item.auctionDate ? (
+                        <span
+                          dir="ltr"
+                          className="inline-block font-en font-bold tabular-nums whitespace-nowrap text-[#0F172A]"
+                        >
+                          {formatAuctionDateDisplay(item.auctionDate, lang)}
+                        </span>
+                      ) : (
+                        <span className="text-slate-500 font-semibold text-xs whitespace-nowrap">
+                          {formatAuctionDateDisplay(undefined, lang)}
+                        </span>
+                      )}
+                    </td>
+                    <td className="box-border align-middle py-2.5 px-1.5 border border-[#B8C4D4] text-center font-bold text-[#0F172A] whitespace-nowrap">
                       {isAr ? item.durationAr : item.durationEn}
                     </td>
-                    <td className="py-1.5 px-2 border border-[#B8C4D4] text-center font-extrabold tabular-nums text-[15px] text-[#0F172A]">
+                    <td className="box-border align-middle py-2.5 px-1.5 border border-[#B8C4D4] text-center font-extrabold tabular-nums whitespace-nowrap text-[14.5px] sm:text-[15px] text-[#0F172A]">
                       {item.listedVehicles.toLocaleString('en-US')}
                     </td>
-                    <td className="py-1.5 px-2 border border-[#B8C4D4] text-center font-extrabold tabular-nums text-[15px] text-[#0F172A]">
+                    <td className="box-border align-middle py-2.5 px-1.5 border border-[#B8C4D4] text-center font-extrabold tabular-nums whitespace-nowrap text-[14.5px] sm:text-[15px] text-[#0F172A]">
                       {item.soldVehicles.toLocaleString('en-US')}
                     </td>
-                    <td className="py-1.5 px-2 border border-[#B8C4D4] text-center font-extrabold tabular-nums text-[15px] text-[#0F172A]">
+                    <td className="box-border align-middle py-2.5 px-1.5 border border-[#B8C4D4] text-center font-extrabold tabular-nums whitespace-nowrap text-[14.5px] sm:text-[15px] text-[#0F172A]">
                       {item.unsoldVehicles.toLocaleString('en-US')}
                     </td>
-                    <td className="py-1.5 px-3 border border-[#B8C4D4] text-center font-bold text-[#0F172A]">
+                    <td className="box-border align-middle py-2.5 px-3 border border-[#B8C4D4] text-center font-bold text-[#0F172A] whitespace-normal break-words leading-[1.6]">
                       {isAr ? item.notesAr : item.notesEn}
                     </td>
-                    <td className="py-1.5 px-3 border border-[#B8C4D4] text-center font-bold text-[#0F172A]">
+                    <td className="box-border align-middle py-2.5 px-3 border border-[#B8C4D4] text-center font-bold text-[#0F172A] whitespace-normal break-words leading-[1.6]">
                       {isAr ? item.challengesAr : item.challengesEn}
                     </td>
-                    <td className="py-1.5 px-3 border border-[#B8C4D4] text-center font-bold text-[#0F172A]">
+                    <td className="box-border align-middle py-2.5 px-3.5 border border-[#B8C4D4] text-center font-bold text-[#0F172A] whitespace-normal break-words leading-[1.6]">
                       {isAr ? item.recommendationsAr : item.recommendationsEn}
                     </td>
                     {!pixelPerfectMode && (
-                      <td className="no-print py-1 px-1.5 border border-[#B8C4D4] text-center">
-                        <div className="flex items-center justify-center gap-1">
+                      <td className="no-print box-border align-middle py-2 px-1 border border-[#B8C4D4] text-center whitespace-nowrap">
+                        <div className="flex items-center justify-center gap-0.5">
                           <button
                             type="button"
                             onClick={() => onOpenEditModal(item)}
                             title={isAr ? 'تعديل المزاد' : 'Edit Auction'}
-                            className="p-1 text-[#165B9D] hover:bg-blue-100 rounded transition-colors cursor-pointer"
+                            className="p-1.5 text-[#165B9D] hover:bg-blue-100 rounded transition-colors cursor-pointer"
                           >
                             <Edit3 className="w-3.5 h-3.5" />
                           </button>
@@ -1072,7 +1258,7 @@ export const AuctionDataReport: React.FC<AuctionDataReportProps> = ({
                             type="button"
                             onClick={() => onDeleteAuction(item)}
                             title={isAr ? 'حذف المزاد' : 'Delete Auction'}
-                            className="p-1 text-[#B4232C] hover:bg-red-100 rounded transition-colors cursor-pointer"
+                            className="p-1.5 text-[#B4232C] hover:bg-red-100 rounded transition-colors cursor-pointer"
                           >
                             <Trash2 className="w-3.5 h-3.5" />
                           </button>
@@ -1089,7 +1275,7 @@ export const AuctionDataReport: React.FC<AuctionDataReportProps> = ({
           <tfoot>
             <tr className="text-[15px] sm:text-[16px] font-black select-none">
               <td
-                colSpan={3}
+                colSpan={4}
                 style={{
                   background:
                     'linear-gradient(180deg, #164C88 0%, #0F3462 100%)',

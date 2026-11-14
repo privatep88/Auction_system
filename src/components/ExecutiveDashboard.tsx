@@ -14,6 +14,8 @@ import {
   ArrowUpRight,
   ArrowDownRight,
   FileCheck2,
+  CalendarDays,
+  ArrowUpDown,
 } from 'lucide-react';
 import {
   AuctionRecord,
@@ -26,6 +28,10 @@ import {
   evaluateAuctionPerformance,
   getMonthName,
 } from '../services/storageService';
+import {
+  compareAuctionDates,
+  formatAuctionDateDisplay,
+} from '../utils/auctionDateUtils';
 import {
   GoldenGavelIcon,
   NavyCarIcon,
@@ -84,11 +90,22 @@ export const ExecutiveDashboard: React.FC<ExecutiveDashboardProps> = ({
   const monthNameEn = getMonthName(selectedPeriod.month, 'en');
 
   const [hoveredAuctionId, setHoveredAuctionId] = useState<string | null>(null);
+  const [compDateSort, setCompDateSort] = useState<'none' | 'asc' | 'desc'>(
+    'none'
+  );
 
   // Sorted descending by saleRate for Horizontal Bar Chart (Card 4)
   const sortedBySaleRate = [...auctions].sort(
     (a, b) => b.saleRate - a.saleRate
   );
+
+  // Comparative Table rows (supports optional chronological sort by auctionDate)
+  const comparativeAuctions =
+    compDateSort === 'none'
+      ? auctions
+      : [...auctions].sort((a, b) =>
+          compareAuctionDates(a.auctionDate, b.auctionDate, compDateSort === 'asc')
+        );
 
   // Dynamic Y-axis max for Clustered Bar Chart (Card 3 - minimum 350 to match reference)
   const maxListedValue = Math.max(
@@ -1131,6 +1148,29 @@ export const ExecutiveDashboard: React.FC<ExecutiveDashboardProps> = ({
                   <th className="py-2.5 px-3 border-e border-[#24528A] whitespace-nowrap">
                     {isAr ? 'رقم المزاد' : 'Auction ID'}
                   </th>
+                  <th
+                    onClick={() =>
+                      setCompDateSort((prev) =>
+                        prev === 'none'
+                          ? 'asc'
+                          : prev === 'asc'
+                          ? 'desc'
+                          : 'none'
+                      )
+                    }
+                    title={
+                      isAr
+                        ? 'انقر للترتيب الزمني حسب تاريخ المزاد'
+                        : 'Click to sort chronologically by auction date'
+                    }
+                    className="py-2.5 px-2.5 border-e border-[#24528A] whitespace-nowrap cursor-pointer hover:bg-white/10 transition-colors select-none"
+                  >
+                    <div className="inline-flex items-center justify-center gap-1">
+                      <CalendarDays className="w-3.5 h-3.5 text-[#D6A348] shrink-0" />
+                      <span>{isAr ? 'تاريخ المزاد' : 'Auction Date'}</span>
+                      <ArrowUpDown className="w-3 h-3 text-white/75 shrink-0" />
+                    </div>
+                  </th>
                   <th className="py-2.5 px-2.5 border-e border-[#24528A] whitespace-nowrap">
                     {isAr ? 'المركبات المدرجة' : 'Listed Vehicles'}
                   </th>
@@ -1152,10 +1192,10 @@ export const ExecutiveDashboard: React.FC<ExecutiveDashboardProps> = ({
                 </tr>
               </thead>
               <tbody className="text-[#14243D] divide-y divide-slate-200">
-                {auctions.length === 0 ? (
+                {comparativeAuctions.length === 0 ? (
                   <tr>
                     <td
-                      colSpan={7}
+                      colSpan={8}
                       className="py-8 px-4 text-center text-[#64748B] font-bold"
                     >
                       <div className="flex flex-col items-center gap-2">
@@ -1180,7 +1220,7 @@ export const ExecutiveDashboard: React.FC<ExecutiveDashboardProps> = ({
                     </td>
                   </tr>
                 ) : (
-                  auctions.map((auc, i) => {
+                  comparativeAuctions.map((auc, i) => {
                     const badge = evaluateAuctionPerformance(
                       auc.saleRate,
                       thresholds,
@@ -1199,6 +1239,17 @@ export const ExecutiveDashboard: React.FC<ExecutiveDashboardProps> = ({
                           <span className="auction-id font-en font-black text-[#123B70] text-[12.5px] px-2 py-0.5 rounded-md bg-[#EEF3F9] border border-[#CBD5E1]">
                             {auc.auctionNumber}
                           </span>
+                        </td>
+                        <td className="py-2 px-2.5 border-e border-slate-200 whitespace-nowrap">
+                          {auc.auctionDate ? (
+                            <span className="font-en font-bold tabular-nums text-[12.5px] text-[#14243D]">
+                              {formatAuctionDateDisplay(auc.auctionDate, lang)}
+                            </span>
+                          ) : (
+                            <span className="text-slate-500 font-semibold text-[11.5px]">
+                              {formatAuctionDateDisplay(undefined, lang)}
+                            </span>
+                          )}
                         </td>
                         <td className="py-2 px-2.5 border-e border-slate-200 font-extrabold tabular-nums text-[13px] text-[#14243D]">
                           {auc.listedVehicles.toLocaleString('en-US')}
