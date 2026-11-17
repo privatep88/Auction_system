@@ -409,9 +409,22 @@ export const ExecutiveDashboard: React.FC<ExecutiveDashboardProps> = ({
                   <span className="w-6 h-6 rounded-md bg-[#16843B] text-white flex items-center justify-center shrink-0">
                     <ArrowUpRight className="w-3.5 h-3.5" />
                   </span>
-                  <span className="text-[12px] font-extrabold text-[#14243D] whitespace-nowrap">
-                    {isAr ? 'أعلى نسبة بيع' : 'Highest Sale'}
-                  </span>
+                  <div className="min-w-0">
+                    <span className="block text-[12px] font-extrabold text-[#14243D] whitespace-nowrap">
+                      {isAr ? 'أعلى نسبة بيع' : 'Highest Sale'}
+                    </span>
+                    {metrics.highestSaleAuction.auctionDate && (
+                      <span
+                        dir="ltr"
+                        className="block text-[10px] font-bold font-en tabular-nums text-[#16843B]/90 whitespace-nowrap"
+                      >
+                        {formatAuctionDateDisplay(
+                          metrics.highestSaleAuction.auctionDate,
+                          lang
+                        )}
+                      </span>
+                    )}
+                  </div>
                 </div>
                 <div className="flex items-center gap-1.5 shrink-0">
                   <span className="auction-id font-en text-[12px] font-black px-2 py-0.5 rounded-md bg-white text-[#123B70] border border-[#86EFAC] shadow-2xs">
@@ -439,9 +452,22 @@ export const ExecutiveDashboard: React.FC<ExecutiveDashboardProps> = ({
                   <span className="w-6 h-6 rounded-md bg-[#C52B36] text-white flex items-center justify-center shrink-0">
                     <ArrowDownRight className="w-3.5 h-3.5" />
                   </span>
-                  <span className="text-[12px] font-extrabold text-[#14243D] whitespace-nowrap">
-                    {isAr ? 'أقل نسبة بيع' : 'Lowest Sale'}
-                  </span>
+                  <div className="min-w-0">
+                    <span className="block text-[12px] font-extrabold text-[#14243D] whitespace-nowrap">
+                      {isAr ? 'أقل نسبة بيع' : 'Lowest Sale'}
+                    </span>
+                    {metrics.lowestSaleAuction.auctionDate && (
+                      <span
+                        dir="ltr"
+                        className="block text-[10px] font-bold font-en tabular-nums text-[#C52B36]/90 whitespace-nowrap"
+                      >
+                        {formatAuctionDateDisplay(
+                          metrics.lowestSaleAuction.auctionDate,
+                          lang
+                        )}
+                      </span>
+                    )}
+                  </div>
                 </div>
                 <div className="flex items-center gap-1.5 shrink-0">
                   <span className="auction-id font-en text-[12px] font-black px-2 py-0.5 rounded-md bg-white text-[#123B70] border border-[#FCA5A5] shadow-2xs">
@@ -822,32 +848,35 @@ export const ExecutiveDashboard: React.FC<ExecutiveDashboardProps> = ({
                       {isHovered && (
                         <g
                           transform={`translate(${Math.min(
-                            barChartSvgWidth - 115,
-                            Math.max(40, groupCenter - 52)
-                          )}, 6)`}
+                            barChartSvgWidth - 125,
+                            Math.max(40, groupCenter - 58)
+                          )}, 4)`}
                         >
                           <rect
                             x="0"
                             y="0"
-                            width="104"
-                            height="40"
+                            width="116"
+                            height="42"
                             rx="6"
                             fill="#14243D"
                             opacity="0.95"
                           />
                           <text
-                            x="52"
+                            x="58"
                             y="13"
                             textAnchor="middle"
                             fill="#D6A348"
-                            fontSize="9.5"
+                            fontSize="9"
                             fontWeight="800"
                             className="font-en"
                           >
                             {auc.auctionNumber} ({auc.saleRate.toFixed(1)}%)
+                            {auc.auctionDate
+                              ? ` • ${formatAuctionDateDisplay(auc.auctionDate, lang)}`
+                              : ''}
                           </text>
                           <text
-                            x="52"
+                            x="58"
                             y="25"
                             textAnchor="middle"
                             fill="#FFFFFF"
@@ -858,8 +887,8 @@ export const ExecutiveDashboard: React.FC<ExecutiveDashboardProps> = ({
                             {`Listed: ${auc.listedVehicles} | Sold: ${auc.soldVehicles}`}
                           </text>
                           <text
-                            x="52"
-                            y="35"
+                            x="58"
+                            y="36"
                             textAnchor="middle"
                             fill="#FCA5A5"
                             fontSize="8.5"
@@ -959,6 +988,11 @@ export const ExecutiveDashboard: React.FC<ExecutiveDashboardProps> = ({
                 return (
                   <div
                     key={auc.id}
+                    title={`${auc.auctionNumber}${
+                      auc.auctionDate
+                        ? ` (${formatAuctionDateDisplay(auc.auctionDate, lang)})`
+                        : ''
+                    } — ${auc.saleRate.toFixed(1)}%`}
                     className="flex items-center gap-2.5 text-[12px] font-extrabold"
                   >
                     {/* Unbreakable Single-Line Auction Code */}
@@ -1362,9 +1396,19 @@ export const ExecutiveDashboard: React.FC<ExecutiveDashboardProps> = ({
                       {isAr ? auc.notesAr : auc.notesEn}
                     </span>
                   </div>
-                  <span className="auction-id font-en text-[11px] font-black px-2 py-0.5 rounded-md bg-[#F0F5FA] text-[#175A9C] border border-[#CBD5E1]">
-                    {auc.auctionNumber}
-                  </span>
+                  <div className="flex flex-col items-end gap-0.5 shrink-0">
+                    <span className="auction-id font-en text-[11px] font-black px-2 py-0.5 rounded-md bg-[#F0F5FA] text-[#175A9C] border border-[#CBD5E1]">
+                      {auc.auctionNumber}
+                    </span>
+                    {auc.auctionDate && (
+                      <span
+                        dir="ltr"
+                        className="text-[10px] font-bold font-en tabular-nums text-[#64748B] whitespace-nowrap"
+                      >
+                        {formatAuctionDateDisplay(auc.auctionDate, lang)}
+                      </span>
+                    )}
+                  </div>
                 </li>
               ))}
             </ul>
@@ -1438,9 +1482,19 @@ export const ExecutiveDashboard: React.FC<ExecutiveDashboardProps> = ({
                       {isAr ? auc.challengesAr : auc.challengesEn}
                     </span>
                   </div>
-                  <span className="auction-id font-en text-[11px] font-black px-2 py-0.5 rounded-md bg-[#FEF3F2] text-[#C52B36] border border-[#FECDCA]">
-                    {auc.auctionNumber}
-                  </span>
+                  <div className="flex flex-col items-end gap-0.5 shrink-0">
+                    <span className="auction-id font-en text-[11px] font-black px-2 py-0.5 rounded-md bg-[#FEF3F2] text-[#C52B36] border border-[#FECDCA]">
+                      {auc.auctionNumber}
+                    </span>
+                    {auc.auctionDate && (
+                      <span
+                        dir="ltr"
+                        className="text-[10px] font-bold font-en tabular-nums text-[#64748B] whitespace-nowrap"
+                      >
+                        {formatAuctionDateDisplay(auc.auctionDate, lang)}
+                      </span>
+                    )}
+                  </div>
                 </li>
               ))}
             </ul>
@@ -1514,9 +1568,19 @@ export const ExecutiveDashboard: React.FC<ExecutiveDashboardProps> = ({
                       {isAr ? auc.recommendationsAr : auc.recommendationsEn}
                     </span>
                   </div>
-                  <span className="auction-id font-en text-[11px] font-black px-2 py-0.5 rounded-md bg-[#ECFDF3] text-[#16843B] border border-[#ABEFC6]">
-                    {auc.auctionNumber}
-                  </span>
+                  <div className="flex flex-col items-end gap-0.5 shrink-0">
+                    <span className="auction-id font-en text-[11px] font-black px-2 py-0.5 rounded-md bg-[#ECFDF3] text-[#16843B] border border-[#ABEFC6]">
+                      {auc.auctionNumber}
+                    </span>
+                    {auc.auctionDate && (
+                      <span
+                        dir="ltr"
+                        className="text-[10px] font-bold font-en tabular-nums text-[#64748B] whitespace-nowrap"
+                      >
+                        {formatAuctionDateDisplay(auc.auctionDate, lang)}
+                      </span>
+                    )}
+                  </div>
                 </li>
               ))}
             </ul>

@@ -179,6 +179,39 @@ function computeRowFields(
   return { unsoldVehicles, saleRate, unsoldRate };
 }
 
+const DEFAULT_PERIOD_DAYS = [4, 9, 15, 21, 27, 6, 12, 18, 24, 28];
+
+/**
+ * Generates a realistic calendar date within the given (year, month) for auction index `idx`.
+ * If an existing valid ISO date is provided, shifts its year/month to match the target period
+ * while clamping the day safely to the target month's length.
+ */
+export function getDefaultSameMonthDateForIndex(
+  year: number,
+  month: number,
+  idx: number,
+  existingIsoDate?: string
+): string {
+  const safeYear = Number(year) || 2026;
+  const safeMonth = Math.min(12, Math.max(1, Number(month) || 11));
+  const paddedMonth = String(safeMonth).padStart(2, '0');
+  const maxDayInMonth = new Date(safeYear, safeMonth, 0).getDate();
+
+  const normalizedExisting = normalizeIsoDate(existingIsoDate);
+  if (normalizedExisting) {
+    const [, , dStr] = normalizedExisting.split('-');
+    const existingDay = Math.min(
+      maxDayInMonth,
+      Math.max(1, Number(dStr) || DEFAULT_PERIOD_DAYS[idx % DEFAULT_PERIOD_DAYS.length])
+    );
+    return `${safeYear}-${paddedMonth}-${String(existingDay).padStart(2, '0')}`;
+  }
+
+  const presetDay = DEFAULT_PERIOD_DAYS[idx % DEFAULT_PERIOD_DAYS.length];
+  const clampedDay = Math.min(maxDayInMonth, Math.max(1, presetDay));
+  return `${safeYear}-${paddedMonth}-${String(clampedDay).padStart(2, '0')}`;
+}
+
 /**
  * Original October 2026 source records (preserved in backup and migrated to November 2026)
  */
@@ -188,6 +221,7 @@ export const INITIAL_OCTOBER_AUCTIONS: AuctionRecord[] = [
     year: 2026,
     month: 10,
     auctionNumber: 'AUC-001',
+    auctionDate: '2026-10-04',
     durationAr: 'أسبوع (7 أيام)',
     durationEn: '1 Week (7 Days)',
     listedVehicles: 300,
@@ -207,6 +241,7 @@ export const INITIAL_OCTOBER_AUCTIONS: AuctionRecord[] = [
     year: 2026,
     month: 10,
     auctionNumber: 'AUC-002',
+    auctionDate: '2026-10-09',
     durationAr: '10 أيام',
     durationEn: '10 Days',
     listedVehicles: 220,
@@ -226,6 +261,7 @@ export const INITIAL_OCTOBER_AUCTIONS: AuctionRecord[] = [
     year: 2026,
     month: 10,
     auctionNumber: 'AUC-003',
+    auctionDate: '2026-10-15',
     durationAr: 'أسبوع (7 أيام)',
     durationEn: '1 Week (7 Days)',
     listedVehicles: 280,
@@ -245,6 +281,7 @@ export const INITIAL_OCTOBER_AUCTIONS: AuctionRecord[] = [
     year: 2026,
     month: 10,
     auctionNumber: 'AUC-004',
+    auctionDate: '2026-10-21',
     durationAr: '14 يومًا',
     durationEn: '14 Days',
     listedVehicles: 250,
@@ -264,6 +301,7 @@ export const INITIAL_OCTOBER_AUCTIONS: AuctionRecord[] = [
     year: 2026,
     month: 10,
     auctionNumber: 'AUC-005',
+    auctionDate: '2026-10-27',
     durationAr: 'أسبوع (7 أيام)',
     durationEn: '1 Week (7 Days)',
     listedVehicles: 200,
@@ -282,7 +320,8 @@ export const INITIAL_OCTOBER_AUCTIONS: AuctionRecord[] = [
 
 /**
  * Clones auction records into a target year/month with fresh unique internal IDs
- * while keeping all user-facing auction numbers, values, notes, challenges, and recommendations identical.
+ * and dates aligned to the target month/year while keeping all user-facing auction numbers,
+ * values, notes, challenges, and recommendations identical.
  */
 export function cloneAuctionsToPeriod(
   sourceRecords: AuctionRecord[],
@@ -297,6 +336,12 @@ export function cloneAuctionsToPeriod(
         id: `auc-${targetYear}-${paddedMonth}-${idx + 1}`,
         year: targetYear,
         month: targetMonth,
+        auctionDate: getDefaultSameMonthDateForIndex(
+          targetYear,
+          targetMonth,
+          idx,
+          rec.auctionDate
+        ),
         updatedAt: new Date().toISOString(),
       },
       { year: targetYear, month: targetMonth }
@@ -330,6 +375,8 @@ export function verifyAuctionMigrationParity(
   for (let i = 0; i < source.length; i++) {
     const s = source[i];
     const d = destination[i];
+    const sDay = s.auctionDate ? s.auctionDate.split('-')[2] : '';
+    const dDay = d.auctionDate ? d.auctionDate.split('-')[2] : '';
     if (
       s.auctionNumber !== d.auctionNumber ||
       s.durationAr !== d.durationAr ||
@@ -342,7 +389,7 @@ export function verifyAuctionMigrationParity(
       s.notesAr !== d.notesAr ||
       s.challengesAr !== d.challengesAr ||
       s.recommendationsAr !== d.recommendationsAr ||
-      (s.auctionDate || '') !== (d.auctionDate || '') ||
+      (sDay && dDay && sDay !== dDay) ||
       s.id === d.id // Internal database IDs must be distinct to avoid collisions
     ) {
       return {
@@ -580,6 +627,31 @@ export function getPreMigrationBackup(): MigrationBackupPayload | null {
 function loadAllArchivesMap(): ArchiveMap {
   const existingMap = loadRawArchivesMapFromStorage();
   if (existingMap) {
+    let anyBackfilled = false;
+    Object.values(existingMap).forEach((entry) => {
+      if (entry && Array.isArray(entry.auctions)) {
+        entry.auctions = entry.auctions.map((auc, idx) => {
+          if (!auc.auctionDate) {
+            anyBackfilled = true;
+            return normalizeAuctionRecord(
+              {
+                ...auc,
+                auctionDate: getDefaultSameMonthDateForIndex(
+                  entry.year,
+                  entry.month,
+                  idx
+                ),
+              },
+              { year: entry.year, month: entry.month }
+            );
+          }
+          return auc;
+        });
+      }
+    });
+    if (anyBackfilled) {
+      saveAllArchivesMap(existingMap);
+    }
     // Ensure backup exists
     ensurePreMigrationBackup(existingMap);
     return existingMap;
