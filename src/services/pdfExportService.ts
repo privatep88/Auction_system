@@ -33,6 +33,9 @@ interface LoadedReportAssets {
   saaedLogoDataUrl: string | null;
   headerPhotoDataUrl: string | null;
   yardShowcaseDataUrl: string | null;
+  cardDistributionHeroDataUrl: string | null;
+  cardComparisonHeroDataUrl: string | null;
+  cardSuccessRateHeroDataUrl: string | null;
   opsNotesDataUrl: string | null;
   opsChallengesDataUrl: string | null;
   opsRecommendationsDataUrl: string | null;
@@ -101,6 +104,9 @@ async function getLoadedReportAssets(): Promise<LoadedReportAssets> {
         saaedLogoDataUrl,
         headerPhotoDataUrl,
         yardShowcaseDataUrl,
+        cardDistributionHeroDataUrl,
+        cardComparisonHeroDataUrl,
+        cardSuccessRateHeroDataUrl,
         opsNotesDataUrl,
         opsChallengesDataUrl,
         opsRecommendationsDataUrl,
@@ -111,6 +117,9 @@ async function getLoadedReportAssets(): Promise<LoadedReportAssets> {
         loadImageDataUrl('assets/saaed_logo.png', 'image/png'),
         loadImageDataUrl('assets/header_top_photo.png', 'image/png'),
         loadImageDataUrl('assets/auction_yard_showcase.jpg', 'image/jpeg'),
+        loadImageDataUrl('assets/card_distribution_hero.jpg', 'image/jpeg'),
+        loadImageDataUrl('assets/card_comparison_hero.jpg', 'image/jpeg'),
+        loadImageDataUrl('assets/card_success_rate_hero.jpg', 'image/jpeg'),
         loadImageDataUrl(
           'assets/operational_notes_inspection.jpg',
           'image/jpeg'
@@ -132,6 +141,9 @@ async function getLoadedReportAssets(): Promise<LoadedReportAssets> {
         saaedLogoDataUrl,
         headerPhotoDataUrl,
         yardShowcaseDataUrl,
+        cardDistributionHeroDataUrl,
+        cardComparisonHeroDataUrl,
+        cardSuccessRateHeroDataUrl,
         opsNotesDataUrl,
         opsChallengesDataUrl,
         opsRecommendationsDataUrl,
@@ -139,6 +151,51 @@ async function getLoadedReportAssets(): Promise<LoadedReportAssets> {
     })();
   }
   return cachedAssetsPromise;
+}
+
+/**
+ * Draws a panoramic card hero image directly beneath a card header bar and blends
+ * its bottom ~48% smoothly into pure white (#FFFFFF) using progressive GState opacity
+ * bands so there is zero harsh edge between the photograph and the chart surface.
+ */
+function drawCardHeroWithWhiteFade(
+  doc: jsPDF,
+  imgDataUrl: string | null,
+  x: number,
+  y: number,
+  w: number,
+  h: number
+): void {
+  const innerX = x + 0.3;
+  const innerW = w - 0.6;
+  if (!imgDataUrl) return;
+
+  doc.addImage(imgDataUrl, 'JPEG', innerX, y, innerW, h, undefined, 'FAST');
+
+  // Multi-step progressive white fade across the lower 48% of the photo
+  const GStateCtor = (doc as unknown as {
+    GState?: new (opts: { opacity: number }) => unknown;
+  }).GState;
+
+  if (typeof GStateCtor === 'function' && typeof doc.setGState === 'function') {
+    const fadeStartY = y + h * 0.5;
+    const fadeH = h * 0.5;
+    const steps = 14;
+    const bandH = fadeH / steps;
+
+    doc.setFillColor(255, 255, 255);
+    for (let i = 0; i < steps; i++) {
+      const t = (i + 1) / steps;
+      // Smooth ease-in curve matching CSS gradient (0 -> 0.38 -> 0.82 -> 1)
+      const alpha = Math.min(1, Math.pow(t, 1.55));
+      doc.setGState(new GStateCtor({ opacity: alpha }) as never);
+      doc.rect(innerX, fadeStartY + i * bandH, innerW, bandH + 0.15, 'F');
+    }
+    doc.setGState(new GStateCtor({ opacity: 1 }) as never);
+    // Clean white seal along the bottom seam to guarantee zero dark fringe
+    doc.setFillColor(255, 255, 255);
+    doc.rect(innerX, y + h - 0.45, innerW, 0.7, 'F');
+  }
 }
 
 function registerArabicFontsInJsPdf(
@@ -1409,10 +1466,27 @@ export async function buildExecutivePdfDocument(
     'Auction Results Distribution'
   );
 
-  const donutCx = centerCardX + 26 * s;
-  const donutCy = distBodyY + 32 * s;
-  const rOuter = 19.5 * s;
-  const rInner = 11.8 * s;
+  // Panoramic hero photo with smooth bottom white fade
+  const distHeroH = 18.5 * s;
+  drawCardHeroWithWhiteFade(
+    doc,
+    assets.cardDistributionHeroDataUrl || assets.yardShowcaseDataUrl,
+    centerCardX,
+    distBodyY,
+    mainCardW,
+    distHeroH
+  );
+
+  const effBarBoxH = 15 * s;
+  const effBarBoxY = curY + mainCardsH - effBarBoxH;
+  const distChartTop = distBodyY + distHeroH;
+  const distChartAvailH = Math.max(36 * s, effBarBoxY - distChartTop);
+  const distChartMidY = distChartTop + distChartAvailH / 2;
+
+  const donutCx = centerCardX + 25 * s;
+  const donutCy = distChartMidY;
+  const rOuter = Math.min(17.2 * s, distChartAvailH * 0.41);
+  const rInner = rOuter * 0.61;
 
   if (metrics.totalListed <= 0) {
     drawAnnularSector(
@@ -1439,7 +1513,7 @@ export async function buildExecutivePdfDocument(
       rOuter,
       startAngle,
       soldEndAngle,
-      [23, 90, 156] // #175A9C
+      [18, 89, 167] // #1259A7
     );
     if (soldRatio < 0.999) {
       drawAnnularSector(
@@ -1450,7 +1524,7 @@ export async function buildExecutivePdfDocument(
         rOuter,
         soldEndAngle,
         fullEndAngle,
-        [197, 43, 54] // #C52B36
+        [214, 40, 40] // #D62828
       );
     }
 
@@ -1459,9 +1533,9 @@ export async function buildExecutivePdfDocument(
     if (metrics.overallSaleRate >= 15) {
       const midSoldAngle = (startAngle + soldEndAngle) / 2;
       const tx = donutCx + rMid * Math.cos(midSoldAngle);
-      const ty = donutCy + rMid * Math.sin(midSoldAngle) + 1.1 * s;
+      const ty = donutCy + rMid * Math.sin(midSoldAngle) + 1.0 * s;
       doc.setFont('IBMPlexSansArabic', 'bold');
-      doc.setFontSize(6.8 * s);
+      doc.setFontSize(6.4 * s);
       doc.setTextColor(255, 255, 255);
       doc.text(`${metrics.overallSaleRate.toFixed(1)}%`, tx, ty, {
         align: 'center',
@@ -1470,9 +1544,9 @@ export async function buildExecutivePdfDocument(
     if (metrics.overallUnsoldRate >= 8) {
       const midUnsoldAngle = (soldEndAngle + fullEndAngle) / 2;
       const tx = donutCx + rMid * Math.cos(midUnsoldAngle);
-      const ty = donutCy + rMid * Math.sin(midUnsoldAngle) + 1.1 * s;
+      const ty = donutCy + rMid * Math.sin(midUnsoldAngle) + 1.0 * s;
       doc.setFont('IBMPlexSansArabic', 'bold');
-      doc.setFontSize(6.6 * s);
+      doc.setFontSize(6.2 * s);
       doc.setTextColor(255, 255, 255);
       doc.text(`${metrics.overallUnsoldRate.toFixed(1)}%`, tx, ty, {
         align: 'center',
@@ -1482,7 +1556,7 @@ export async function buildExecutivePdfDocument(
 
   // Center text inside doughnut hole
   doc.setFont('IBMPlexSansArabic', 'bold');
-  doc.setFontSize(10.5 * s);
+  doc.setFontSize(9.8 * s);
   doc.setTextColor(20, 36, 61);
   doc.text(
     metrics.totalListed.toLocaleString('en-US'),
@@ -1491,105 +1565,104 @@ export async function buildExecutivePdfDocument(
     { align: 'center' }
   );
   doc.setFont('IBMPlexSansArabic', 'semibold');
-  doc.setFontSize(7.2 * s);
+  doc.setFontSize(6.8 * s);
   doc.setTextColor(100, 116, 139);
   drawSmartText(
     doc,
     isAr ? 'مركبة مدرجة' : 'Vehicles',
     donutCx,
-    donutCy + 4.2 * s,
+    donutCy + 3.8 * s,
     'center'
   );
 
   // Breakdown Legend Cards on the right side of the Doughnut
-  const legX = centerCardX + 49 * s;
-  const legW = mainCardW - 52.5 * s;
+  const legX = centerCardX + 46.5 * s;
+  const legW = mainCardW - 50 * s;
+  const legBoxGap = 3 * s;
+  const legBoxH = Math.min(17.5 * s, (distChartAvailH - legBoxGap - 6 * s) / 2);
+  const soldBoxY = distChartMidY - legBoxH - legBoxGap / 2;
 
   // Sold box
-  const soldBoxY = distBodyY + 11 * s;
-  const legBoxH = 19 * s;
-  doc.setFillColor(244, 247, 251);
-  doc.setDrawColor(203, 213, 225);
+  doc.setFillColor(242, 246, 251);
+  doc.setDrawColor(220, 230, 242);
   doc.roundedRect(legX, soldBoxY, legW, legBoxH, 1.8 * s, 1.8 * s, 'FD');
-  doc.setFillColor(23, 90, 156);
+  doc.setFillColor(18, 89, 167);
   doc.rect(
-    legX + legW - 5.5 * s,
-    soldBoxY + 3.8 * s,
-    2.6 * s,
-    2.6 * s,
+    legX + legW - 5.2 * s,
+    soldBoxY + 3.2 * s,
+    2.5 * s,
+    2.5 * s,
     'F'
   );
   doc.setFont('IBMPlexSansArabic', 'bold');
-  doc.setFontSize(8.4 * s);
+  doc.setFontSize(8.2 * s);
   doc.setTextColor(20, 36, 61);
   drawSmartText(
     doc,
     isAr ? 'المركبات المبيعة' : 'Sold Vehicles',
-    legX + legW - 9.5 * s,
-    soldBoxY + 6.2 * s,
+    legX + legW - 9 * s,
+    soldBoxY + 5.6 * s,
     'right'
   );
   doc.setFont('IBMPlexSansArabic', 'bold');
-  doc.setFontSize(10.5 * s);
+  doc.setFontSize(10 * s);
   doc.setTextColor(20, 36, 61);
   doc.text(
     metrics.totalSold.toLocaleString('en-US'),
-    legX + legW - 4 * s,
-    soldBoxY + 14.5 * s,
+    legX + legW - 3.8 * s,
+    soldBoxY + legBoxH - 3.6 * s,
     { align: 'right' }
   );
-  doc.setFontSize(8.5 * s);
-  doc.setTextColor(23, 90, 156);
+  doc.setFontSize(8.2 * s);
+  doc.setTextColor(18, 89, 167);
   doc.text(
     `(${metrics.overallSaleRate.toFixed(1)}%)`,
-    legX + 3.5 * s,
-    soldBoxY + 14.5 * s,
+    legX + 3.2 * s,
+    soldBoxY + legBoxH - 3.6 * s,
     { align: 'left' }
   );
 
   // Unsold box
-  const unsoldBoxY = soldBoxY + legBoxH + 4 * s;
-  doc.setFillColor(254, 243, 242);
-  doc.setDrawColor(254, 205, 202);
+  const unsoldBoxY = soldBoxY + legBoxH + legBoxGap;
+  doc.setFillColor(254, 244, 244);
+  doc.setDrawColor(250, 219, 216);
   doc.roundedRect(legX, unsoldBoxY, legW, legBoxH, 1.8 * s, 1.8 * s, 'FD');
-  doc.setFillColor(197, 43, 54);
+  doc.setFillColor(214, 40, 40);
   doc.rect(
-    legX + legW - 5.5 * s,
-    unsoldBoxY + 3.8 * s,
-    2.6 * s,
-    2.6 * s,
+    legX + legW - 5.2 * s,
+    unsoldBoxY + 3.2 * s,
+    2.5 * s,
+    2.5 * s,
     'F'
   );
   doc.setFont('IBMPlexSansArabic', 'bold');
-  doc.setFontSize(8.4 * s);
+  doc.setFontSize(8.2 * s);
   doc.setTextColor(20, 36, 61);
   drawSmartText(
     doc,
     isAr ? 'المركبات غير المبيعة' : 'Unsold Vehicles',
-    legX + legW - 9.5 * s,
-    unsoldBoxY + 6.2 * s,
+    legX + legW - 9 * s,
+    unsoldBoxY + 5.6 * s,
     'right'
   );
   doc.setFont('IBMPlexSansArabic', 'bold');
-  doc.setFontSize(10.5 * s);
-  doc.setTextColor(197, 43, 54);
+  doc.setFontSize(10 * s);
+  doc.setTextColor(214, 40, 40);
   doc.text(
     metrics.totalUnsold.toLocaleString('en-US'),
-    legX + legW - 4 * s,
-    unsoldBoxY + 14.5 * s,
+    legX + legW - 3.8 * s,
+    unsoldBoxY + legBoxH - 3.6 * s,
     { align: 'right' }
   );
-  doc.setFontSize(8.5 * s);
+  doc.setFontSize(8.2 * s);
   doc.text(
     `(${metrics.overallUnsoldRate.toFixed(1)}%)`,
-    legX + 3.5 * s,
-    unsoldBoxY + 14.5 * s,
+    legX + 3.2 * s,
+    unsoldBoxY + legBoxH - 3.6 * s,
     { align: 'left' }
   );
 
-  // Monthly efficiency bar at bottom of Center Card
-  const effBarBoxH = 16 * s;
-  const effBarBoxY = curY + mainCardsH - effBarBoxH;
+  // Overall sale rate bar at bottom of Center Card
   doc.setFillColor(248, 250, 252);
   doc.setDrawColor(226, 232, 240);
   doc.line(
@@ -1599,25 +1672,25 @@ export async function buildExecutivePdfDocument(
     effBarBoxY
   );
   doc.setFont('IBMPlexSansArabic', 'bold');
-  doc.setFontSize(8.4 * s);
-  doc.setTextColor(100, 116, 139);
+  doc.setFontSize(8.2 * s);
+  doc.setTextColor(71, 85, 105);
   drawSmartText(
     doc,
-    isAr ? 'مؤشر كفاءة البيع الشهرية' : 'Monthly Sale Efficiency',
+    isAr ? 'مؤشر نسبة البيع الإجمالية' : 'Overall Sale Rate Index',
     centerCardX + mainCardW - 4.5 * s,
-    effBarBoxY + 6.2 * s,
+    effBarBoxY + 5.8 * s,
     'right'
   );
-  doc.setTextColor(22, 132, 59);
+  doc.setTextColor(26, 143, 62);
   doc.text(
     `${metrics.overallSaleRate.toFixed(1)}%`,
     centerCardX + 4.5 * s,
-    effBarBoxY + 6.2 * s,
+    effBarBoxY + 5.8 * s,
     { align: 'left' }
   );
 
   const barTrackX = centerCardX + 4.5 * s;
-  const barTrackY = effBarBoxY + 9.2 * s;
+  const barTrackY = effBarBoxY + 8.6 * s;
   const barTrackW = mainCardW - 9 * s;
   const barTrackH = 3.2 * s;
   doc.setFillColor(226, 232, 240);
@@ -1633,11 +1706,25 @@ export async function buildExecutivePdfDocument(
   const soldFillW =
     barTrackW * Math.min(1, Math.max(0, metrics.overallSaleRate / 100));
   if (soldFillW > 0) {
-    doc.setFillColor(22, 132, 59);
+    doc.setFillColor(26, 143, 62);
     doc.roundedRect(
       barTrackX,
       barTrackY,
       soldFillW,
+      barTrackH,
+      1.5 * s,
+      1.5 * s,
+      'F'
+    );
+  }
+  const unsoldFillW =
+    barTrackW * Math.min(1, Math.max(0, metrics.overallUnsoldRate / 100));
+  if (unsoldFillW > 0 && soldFillW < barTrackW) {
+    doc.setFillColor(214, 40, 40);
+    doc.roundedRect(
+      barTrackX + soldFillW,
+      barTrackY,
+      Math.min(unsoldFillW, barTrackW - soldFillW),
       barTrackH,
       1.5 * s,
       1.5 * s,
@@ -1853,8 +1940,19 @@ export async function buildExecutivePdfDocument(
       'Auction Performance Comparison — Listed, Sold & Unsold'
     );
 
+    // Panoramic hero photo with smooth bottom white fade
+    const chartHeroH = 26 * s;
+    drawCardHeroWithWhiteFade(
+      doc,
+      assets.cardComparisonHeroDataUrl || assets.yardShowcaseDataUrl,
+      rightChartX,
+      barHeaderBottom,
+      rightChartW,
+      chartHeroH
+    );
+
     const legendH = 12 * s;
-    const plotTop = barHeaderBottom + 8 * s;
+    const plotTop = barHeaderBottom + chartHeroH + 6 * s;
     const plotBottom = topY + chartsH - legendH - 10 * s;
     const plotH = plotBottom - plotTop;
     const plotLeft = rightChartX + 14 * s;
@@ -2061,13 +2159,23 @@ export async function buildExecutivePdfDocument(
       'Sale Success Rate by Auction — Descending'
     );
 
+    // Panoramic hero photo with smooth bottom white fade
+    drawCardHeroWithWhiteFade(
+      doc,
+      assets.cardSuccessRateHeroDataUrl || assets.yardShowcaseDataUrl,
+      leftChartX,
+      rankHeaderBottom,
+      leftChartW,
+      chartHeroH
+    );
+
     const rankBatch = sortedBySaleRateAll.slice(
       batchIdx * chartBatchSize,
       (batchIdx + 1) * chartBatchSize
     );
 
     const scaleFooterH = 12 * s;
-    const rankBodyTop = rankHeaderBottom + 5 * s;
+    const rankBodyTop = rankHeaderBottom + chartHeroH + 4 * s;
     const rankBodyBottom = topY + chartsH - scaleFooterH - 2 * s;
     const rankBodyH = rankBodyBottom - rankBodyTop;
 

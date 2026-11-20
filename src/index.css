@@ -25,6 +25,42 @@
 }
 
 /* ============================================================================
+   EXECUTIVE ANALYTICAL CARDS — PANORAMIC HERO WITH SMOOTH BOTTOM WHITE FADE
+   ============================================================================ */
+.auction-card-hero {
+  position: relative;
+  width: 100%;
+  overflow: hidden;
+  background-color: #ffffff;
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
+}
+
+.auction-card-hero img {
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: cover;
+}
+
+.auction-card-hero::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(
+    to bottom,
+    rgba(255, 255, 255, 0) 0%,
+    rgba(255, 255, 255, 0) 52%,
+    rgba(255, 255, 255, 0.38) 72%,
+    rgba(255, 255, 255, 0.82) 88%,
+    rgba(255, 255, 255, 1) 100%
+  );
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
+}
+
+/* ============================================================================
    OFFICIAL REPORT DOCUMENT & SAFE ARABIC RTL TYPOGRAPHY (Preview, Print & PDF)
    Scoped strictly to .report-document so interactive workspace UI is untouched
    ============================================================================ */

@@ -492,30 +492,48 @@ export const ExecutiveDashboard: React.FC<ExecutiveDashboardProps> = ({
           dir={isAr ? 'rtl' : 'ltr'}
           className="bg-white border border-[#D5DFEC] rounded-[16px] shadow-[0_4px_14px_rgba(18,59,112,0.06)] overflow-hidden flex flex-col justify-between"
         >
-          {/* Header */}
-          <div
-            style={{
-              background: 'linear-gradient(135deg, #175A9C 0%, #123B70 100%)',
-            }}
-            className="px-4 py-2.5 text-white flex items-center justify-between border-b border-[#0E2F5A]"
-          >
-            <div className="flex items-center gap-2">
-              <span className="w-7 h-7 rounded-lg bg-white/15 flex items-center justify-center shrink-0">
-                <PieChart className="w-4 h-4 text-[#D6A348]" />
+          {/* Top Stack: Navy Header + Panoramic Hero Photo with Smooth Bottom White Fade */}
+          <div className="shrink-0">
+            <div
+              style={{
+                background:
+                  'linear-gradient(180deg, #175A9C 0%, #123B70 58%, #0B2F5B 100%)',
+              }}
+              className="h-[46px] px-3.5 text-white flex items-center justify-between gap-2"
+            >
+              <span className="w-8 h-8 rounded-[9px] bg-white/12 border border-white/15 flex items-center justify-center shrink-0">
+                <PieChart className="w-[18px] h-[18px] text-[#E2AD42]" />
               </span>
-              <h3 className="text-[14px] sm:text-[14.5px] font-extrabold tracking-tight whitespace-nowrap">
+              <h3 className="flex-1 text-center text-[14.5px] sm:text-[15px] font-extrabold text-white tracking-normal whitespace-nowrap">
                 {isAr ? 'توزيع نتائج المزادات' : 'Auction Results Distribution'}
               </h3>
+              <span className="w-8 shrink-0" aria-hidden="true" />
+            </div>
+
+            <div className="auction-card-hero h-[126px] sm:h-[132px] xl:h-[122px]">
+              <img
+                src={`${assetBase}assets/card_distribution_hero.jpg`}
+                onError={(e) => {
+                  e.currentTarget.src = `${assetBase}assets/header_top_photo.png`;
+                }}
+                alt={
+                  isAr
+                    ? 'ساحة مزادات المركبات ومطرقة المزاد'
+                    : 'Vehicle auction gavel and yard'
+                }
+                referrerPolicy="no-referrer"
+                className="object-center select-none"
+              />
             </div>
           </div>
 
-          {/* Doughnut Chart & Legend */}
+          {/* Doughnut Chart & Breakdown Cards */}
           <div
             dir="ltr"
-            className="flex items-center justify-around gap-3 px-3.5 py-3 my-auto"
+            className="flex items-center justify-around gap-3 px-3.5 pt-1 pb-3 flex-1 bg-white"
           >
-            {/* Balanced Doughnut SVG with spacious viewBox so nothing ever clips */}
-            <div className="relative w-[144px] h-[144px] shrink-0 flex items-center justify-center">
+            {/* Balanced Doughnut SVG with clean white inside labels */}
+            <div className="relative w-[138px] h-[138px] shrink-0 flex items-center justify-center">
               <svg viewBox="0 0 140 140" className="w-full h-full">
                 {!hasVehicles ? (
                   <circle
@@ -528,37 +546,52 @@ export const ExecutiveDashboard: React.FC<ExecutiveDashboardProps> = ({
                   />
                 ) : (
                   <>
-                    {/* Sold Arc (Executive Blue #175A9C) */}
+                    {/* Sold Arc (Corporate Blue #1259A7) */}
                     <circle
                       cx="70"
                       cy="70"
                       r={radius}
                       fill="transparent"
-                      stroke="#175A9C"
+                      stroke="#1259A7"
                       strokeWidth="24"
                       strokeDasharray={`${soldStroke} ${circumference}`}
                       transform="rotate(-90 70 70)"
                     />
-                    {/* Unsold Arc (Danger Red #C52B36) */}
+                    {/* Unsold Arc (Crimson Red #D62828) */}
                     <circle
                       cx="70"
                       cy="70"
                       r={radius}
                       fill="transparent"
-                      stroke="#C52B36"
+                      stroke="#D62828"
                       strokeWidth="24"
                       strokeDasharray={`${unsoldStroke} ${circumference}`}
                       strokeDashoffset={-soldStroke}
                       transform="rotate(-90 70 70)"
                     />
-                    {/* Percentage Labels inside ring */}
+                    {/* Percentage Labels cleanly positioned inside ring */}
                     {metrics.overallUnsoldRate >= 8 && (
                       <text
-                        x="45"
-                        y="29"
+                        x={
+                          70 +
+                          radius *
+                            Math.cos(
+                              (-90 + (soldFraction + unsoldFraction / 2) * 360) *
+                                (Math.PI / 180)
+                            )
+                        }
+                        y={
+                          70 +
+                          radius *
+                            Math.sin(
+                              (-90 + (soldFraction + unsoldFraction / 2) * 360) *
+                                (Math.PI / 180)
+                            ) +
+                          3.5
+                        }
                         textAnchor="middle"
                         fill="#FFFFFF"
-                        fontSize="10"
+                        fontSize="9.5"
                         fontWeight="800"
                         className="font-en"
                       >
@@ -567,11 +600,24 @@ export const ExecutiveDashboard: React.FC<ExecutiveDashboardProps> = ({
                     )}
                     {metrics.overallSaleRate >= 20 && (
                       <text
-                        x="78"
-                        y="122"
+                        x={
+                          70 +
+                          radius *
+                            Math.cos(
+                              (-90 + (soldFraction / 2) * 360) * (Math.PI / 180)
+                            )
+                        }
+                        y={
+                          70 +
+                          radius *
+                            Math.sin(
+                              (-90 + (soldFraction / 2) * 360) * (Math.PI / 180)
+                            ) +
+                          3.5
+                        }
                         textAnchor="middle"
                         fill="#FFFFFF"
-                        fontSize="10.5"
+                        fontSize="10"
                         fontWeight="800"
                         className="font-en"
                       >
@@ -586,48 +632,48 @@ export const ExecutiveDashboard: React.FC<ExecutiveDashboardProps> = ({
                 <span className="text-[19px] font-black text-[#14243D] tabular-nums leading-none">
                   {metrics.totalListed.toLocaleString('en-US')}
                 </span>
-                <span className="text-[12px] font-extrabold text-[#64748B] mt-1">
+                <span className="text-[11.5px] font-extrabold text-[#64748B] mt-1">
                   {isAr ? 'مركبة مدرجة' : 'Vehicles'}
                 </span>
               </div>
             </div>
 
-            {/* Structured Legend */}
-            <div dir={isAr ? 'rtl' : 'ltr'} className="space-y-3 flex-1 min-w-0">
-              <div className="p-2 rounded-xl bg-[#F4F7FB] border border-[#E2E8F0]">
+            {/* Structured Legend Cards */}
+            <div dir={isAr ? 'rtl' : 'ltr'} className="space-y-2.5 flex-1 min-w-0">
+              <div className="px-2.5 py-2 rounded-[12px] bg-[#F2F6FB] border border-[#DCE6F2]">
                 <div className="flex items-center gap-1.5 text-[12px] font-extrabold text-[#14243D]">
-                  <span className="w-3 h-3 rounded-[3px] bg-[#175A9C] shrink-0" />
+                  <span className="w-3 h-3 rounded-[3px] bg-[#1259A7] shrink-0" />
                   <span className="truncate">
                     {isAr ? 'المركبات المبيعة' : 'Sold Vehicles'}
                   </span>
                 </div>
-                <div className="flex items-baseline justify-between gap-1 mt-1 ps-4">
-                  <span className="text-[15px] font-black tabular-nums text-[#14243D]">
+                <div className="flex items-baseline justify-between gap-1 mt-1.5 px-1">
+                  <span className="text-[15.5px] font-black tabular-nums text-[#14243D]">
                     {metrics.totalSold.toLocaleString('en-US')}
                   </span>
                   <span
                     dir="ltr"
-                    className="text-[12px] font-black tabular-nums text-[#175A9C]"
+                    className="text-[12px] font-black tabular-nums text-[#1259A7]"
                   >
                     ({metrics.overallSaleRate.toFixed(1)}%)
                   </span>
                 </div>
               </div>
 
-              <div className="p-2 rounded-xl bg-[#FEF3F2]/70 border border-[#FECDCA]">
+              <div className="px-2.5 py-2 rounded-[12px] bg-[#FEF4F4] border border-[#FADBD8]">
                 <div className="flex items-center gap-1.5 text-[12px] font-extrabold text-[#14243D]">
-                  <span className="w-3 h-3 rounded-[3px] bg-[#C52B36] shrink-0" />
+                  <span className="w-3 h-3 rounded-[3px] bg-[#D62828] shrink-0" />
                   <span className="truncate">
                     {isAr ? 'المركبات غير المبيعة' : 'Unsold Vehicles'}
                   </span>
                 </div>
-                <div className="flex items-baseline justify-between gap-1 mt-1 ps-4">
-                  <span className="text-[15px] font-black tabular-nums text-[#C52B36]">
+                <div className="flex items-baseline justify-between gap-1 mt-1.5 px-1">
+                  <span className="text-[15.5px] font-black tabular-nums text-[#D62828]">
                     {metrics.totalUnsold.toLocaleString('en-US')}
                   </span>
                   <span
                     dir="ltr"
-                    className="text-[12px] font-black tabular-nums text-[#C52B36]"
+                    className="text-[12px] font-black tabular-nums text-[#D62828]"
                   >
                     ({metrics.overallUnsoldRate.toFixed(1)}%)
                   </span>
@@ -637,8 +683,8 @@ export const ExecutiveDashboard: React.FC<ExecutiveDashboardProps> = ({
           </div>
 
           {/* Bottom Overall Sale Rate Progress Strip */}
-          <div className="px-4 pb-3 pt-1.5 border-t border-slate-100 bg-[#F8FAFC]">
-            <div className="flex items-center justify-between text-[11.5px] font-extrabold mb-1">
+          <div className="min-h-[48px] px-4 py-2 border-t border-slate-100/90 bg-[#F8FAFC] flex flex-col justify-center shrink-0">
+            <div className="flex items-center justify-between text-[11.5px] font-extrabold mb-1.5">
               <span className="text-[#64748B]">
                 {isAr ? 'مؤشر نسبة البيع الإجمالية' : 'Overall Sale Rate Index'}
               </span>
@@ -655,13 +701,13 @@ export const ExecutiveDashboard: React.FC<ExecutiveDashboardProps> = ({
             >
               <div
                 style={{ width: `${Math.min(100, metrics.overallSaleRate)}%` }}
-                className="h-full bg-gradient-to-r from-[#175A9C] to-[#16843B] transition-all duration-300"
+                className="h-full bg-gradient-to-r from-[#1259A7] to-[#16843B] transition-all duration-300"
               />
               <div
                 style={{
                   width: `${Math.min(100, metrics.overallUnsoldRate)}%`,
                 }}
-                className="h-full bg-[#C52B36] transition-all duration-300"
+                className="h-full bg-[#D62828] transition-all duration-300"
               />
             </div>
           </div>
@@ -674,27 +720,45 @@ export const ExecutiveDashboard: React.FC<ExecutiveDashboardProps> = ({
           dir={isAr ? 'rtl' : 'ltr'}
           className="bg-white border border-[#D5DFEC] rounded-[16px] shadow-[0_4px_14px_rgba(18,59,112,0.06)] overflow-hidden flex flex-col justify-between"
         >
-          {/* Header */}
-          <div
-            style={{
-              background: 'linear-gradient(135deg, #175A9C 0%, #123B70 100%)',
-            }}
-            className="px-4 py-2.5 text-white flex items-center justify-between border-b border-[#0E2F5A]"
-          >
-            <div className="flex items-center gap-2">
-              <span className="w-7 h-7 rounded-lg bg-white/15 flex items-center justify-center shrink-0">
-                <BarChart3 className="w-4 h-4 text-[#D6A348]" />
+          {/* Top Stack: Navy Header + Panoramic Hero Photo with Smooth Bottom White Fade */}
+          <div className="shrink-0">
+            <div
+              style={{
+                background:
+                  'linear-gradient(180deg, #175A9C 0%, #123B70 58%, #0B2F5B 100%)',
+              }}
+              className="h-[46px] px-3.5 text-white flex items-center justify-between gap-2"
+            >
+              <span className="w-8 h-8 rounded-[9px] bg-white/12 border border-white/15 flex items-center justify-center shrink-0">
+                <BarChart3 className="w-[18px] h-[18px] text-[#E2AD42]" />
               </span>
-              <h3 className="text-[14px] sm:text-[14.5px] font-extrabold tracking-tight whitespace-nowrap">
+              <h3 className="flex-1 text-center text-[14.5px] sm:text-[15px] font-extrabold text-white tracking-normal whitespace-nowrap">
                 {isAr ? 'مقارنة أداء المزادات' : 'Auction Performance Comparison'}
               </h3>
+              <span className="w-8 shrink-0" aria-hidden="true" />
+            </div>
+
+            <div className="auction-card-hero h-[126px] sm:h-[132px] xl:h-[122px]">
+              <img
+                src={`${assetBase}assets/card_comparison_hero.jpg`}
+                onError={(e) => {
+                  e.currentTarget.src = `${assetBase}assets/header_bottom_photo.png`;
+                }}
+                alt={
+                  isAr
+                    ? 'ساحة ومظلات مزادات المركبات'
+                    : 'Panoramic vehicle auction pavilion and lanes'
+                }
+                referrerPolicy="no-referrer"
+                className="object-center select-none"
+              />
             </div>
           </div>
 
           {/* Clustered Column Chart Body */}
           <div
             dir="ltr"
-            className="w-full flex-1 flex flex-col justify-center px-3 pt-3 pb-1 overflow-x-auto"
+            className="w-full flex-1 flex flex-col justify-center px-3 pt-1 pb-2 overflow-x-auto bg-white"
           >
             <svg
               viewBox={`0 0 ${barChartSvgWidth} 165`}
@@ -702,16 +766,16 @@ export const ExecutiveDashboard: React.FC<ExecutiveDashboardProps> = ({
             >
               <defs>
                 <linearGradient id="barNavyGrad" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor="#2467B2" />
-                  <stop offset="100%" stopColor="#123B70" />
+                  <stop offset="0%" stopColor="#1B66B8" />
+                  <stop offset="100%" stopColor="#0E3B75" />
                 </linearGradient>
                 <linearGradient id="barGreenGrad" x1="0" y1="0" x2="0" y2="1">
                   <stop offset="0%" stopColor="#22A04B" />
-                  <stop offset="100%" stopColor="#16843B" />
+                  <stop offset="100%" stopColor="#157A35" />
                 </linearGradient>
                 <linearGradient id="barRedGrad" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor="#E03E49" />
-                  <stop offset="100%" stopColor="#C52B36" />
+                  <stop offset="0%" stopColor="#E63946" />
+                  <stop offset="100%" stopColor="#C11F2A" />
                 </linearGradient>
               </defs>
 
@@ -796,7 +860,7 @@ export const ExecutiveDashboard: React.FC<ExecutiveDashboardProps> = ({
                         width={barWidth}
                         height={Math.max(1.5, listedH)}
                         fill="url(#barNavyGrad)"
-                        rx="2.5"
+                        rx="3"
                       >
                         <title>{`${auc.auctionNumber} — ${
                           isAr ? 'المركبات المدرجة' : 'Listed'
@@ -810,7 +874,7 @@ export const ExecutiveDashboard: React.FC<ExecutiveDashboardProps> = ({
                         width={barWidth}
                         height={Math.max(1.5, soldH)}
                         fill="url(#barGreenGrad)"
-                        rx="2.5"
+                        rx="3"
                       >
                         <title>{`${auc.auctionNumber} — ${
                           isAr ? 'المركبات المبيعة' : 'Sold'
@@ -824,7 +888,7 @@ export const ExecutiveDashboard: React.FC<ExecutiveDashboardProps> = ({
                         width={barWidth}
                         height={Math.max(1.5, unsoldH)}
                         fill="url(#barRedGrad)"
-                        rx="2.5"
+                        rx="3"
                       >
                         <title>{`${auc.auctionNumber} — ${
                           isAr ? 'المركبات غير المبيعة' : 'Unsold'
@@ -865,7 +929,7 @@ export const ExecutiveDashboard: React.FC<ExecutiveDashboardProps> = ({
                             x="58"
                             y="13"
                             textAnchor="middle"
-                            fill="#D6A348"
+                            fill="#E2AD42"
                             fontSize="9"
                             fontWeight="800"
                             className="font-en"
@@ -919,7 +983,7 @@ export const ExecutiveDashboard: React.FC<ExecutiveDashboardProps> = ({
           {/* Bottom Legend */}
           <div
             dir={isAr ? 'rtl' : 'ltr'}
-            className="px-3 py-2 border-t border-slate-100 bg-[#F8FAFC] flex items-center justify-center gap-4 text-[11.5px] font-extrabold text-[#14243D]"
+            className="min-h-[48px] px-3 py-2 border-t border-slate-100/90 bg-[#F8FAFC] flex items-center justify-center gap-4 text-[11.5px] font-extrabold text-[#14243D] shrink-0"
           >
             <div className="flex items-center gap-1.5">
               <span className="w-3 h-3 rounded-[3px] bg-[#123B70]" />
@@ -930,7 +994,7 @@ export const ExecutiveDashboard: React.FC<ExecutiveDashboardProps> = ({
               <span>{isAr ? 'المركبات المبيعة' : 'Sold'}</span>
             </div>
             <div className="flex items-center gap-1.5">
-              <span className="w-3 h-3 rounded-[3px] bg-[#C52B36]" />
+              <span className="w-3 h-3 rounded-[3px] bg-[#D62828]" />
               <span>{isAr ? 'غير المبيعة' : 'Unsold'}</span>
             </div>
           </div>
@@ -943,29 +1007,47 @@ export const ExecutiveDashboard: React.FC<ExecutiveDashboardProps> = ({
           dir={isAr ? 'rtl' : 'ltr'}
           className="bg-white border border-[#D5DFEC] rounded-[16px] shadow-[0_4px_14px_rgba(18,59,112,0.06)] overflow-hidden flex flex-col justify-between"
         >
-          {/* Header */}
-          <div
-            style={{
-              background: 'linear-gradient(135deg, #175A9C 0%, #123B70 100%)',
-            }}
-            className="px-4 py-2.5 text-white flex items-center justify-between border-b border-[#0E2F5A]"
-          >
-            <div className="flex items-center gap-2">
-              <span className="w-7 h-7 rounded-lg bg-white/15 flex items-center justify-center shrink-0">
-                <TrendingUp className="w-4 h-4 text-[#D6A348]" />
+          {/* Top Stack: Navy Header + Panoramic Hero Photo with Smooth Bottom White Fade */}
+          <div className="shrink-0">
+            <div
+              style={{
+                background:
+                  'linear-gradient(180deg, #175A9C 0%, #123B70 58%, #0B2F5B 100%)',
+              }}
+              className="h-[46px] px-3.5 text-white flex items-center justify-between gap-2"
+            >
+              <span className="w-8 h-8 rounded-[9px] bg-white/12 border border-white/15 flex items-center justify-center shrink-0">
+                <TrendingUp className="w-[18px] h-[18px] text-[#E2AD42]" />
               </span>
-              <h3 className="text-[14px] sm:text-[14.5px] font-extrabold tracking-tight whitespace-nowrap">
+              <h3 className="flex-1 text-center text-[14.5px] sm:text-[15px] font-extrabold text-white tracking-normal whitespace-nowrap">
                 {isAr
                   ? 'نسبة نجاح البيع حسب المزاد'
                   : 'Sale Success Rate by Auction'}
               </h3>
+              <span className="w-8 shrink-0" aria-hidden="true" />
+            </div>
+
+            <div className="auction-card-hero h-[126px] sm:h-[132px] xl:h-[122px]">
+              <img
+                src={`${assetBase}assets/card_success_rate_hero.jpg`}
+                onError={(e) => {
+                  e.currentTarget.src = `${assetBase}assets/auction_yard_showcase.jpg`;
+                }}
+                alt={
+                  isAr
+                    ? 'مركبات مصطفة داخل ساحة المزادات'
+                    : 'Featured sedan and lined vehicles in auction yard'
+                }
+                referrerPolicy="no-referrer"
+                className="object-[50%_62%] select-none"
+              />
             </div>
           </div>
 
           {/* Horizontal Bars Container (LTR orientation for bars, zero line-break on AUC-001) */}
           <div
             dir="ltr"
-            className="flex-1 flex flex-col justify-center space-y-2.5 px-3.5 py-3 max-h-[220px] overflow-y-auto"
+            className="flex-1 flex flex-col justify-center space-y-2.5 px-3.5 pt-1 pb-2.5 max-h-[225px] overflow-y-auto bg-white"
           >
             {sortedBySaleRate.length === 0 ? (
               <div className="text-center text-xs font-bold text-[#64748B] py-6">
@@ -976,11 +1058,11 @@ export const ExecutiveDashboard: React.FC<ExecutiveDashboardProps> = ({
             ) : (
               sortedBySaleRate.map((auc, idx) => {
                 const barGradients = [
-                  'linear-gradient(90deg, #16843B 0%, #22A04B 100%)',
-                  'linear-gradient(90deg, #198D3F 0%, #29A852 100%)',
-                  'linear-gradient(90deg, #1E9645 0%, #34B25D 100%)',
-                  'linear-gradient(90deg, #2D9F4E 0%, #48BC69 100%)',
-                  'linear-gradient(90deg, #3DA858 0%, #5CC476 100%)',
+                  'linear-gradient(90deg, #16843B 0%, #1F9A46 100%)',
+                  'linear-gradient(90deg, #1B8F41 0%, #27A850 100%)',
+                  'linear-gradient(90deg, #259B4B 0%, #37B75F 100%)',
+                  'linear-gradient(90deg, #35AA59 0%, #4DC26E 100%)',
+                  'linear-gradient(90deg, #48B769 0%, #63CA7F 100%)',
                 ];
                 const barBg =
                   barGradients[Math.min(idx, barGradients.length - 1)];
@@ -1001,13 +1083,13 @@ export const ExecutiveDashboard: React.FC<ExecutiveDashboardProps> = ({
                     </span>
 
                     {/* Bar Track */}
-                    <div className="flex-1 h-[18px] bg-[#F1F5F9] rounded-md relative flex items-center overflow-hidden border border-slate-200/70">
+                    <div className="flex-1 h-[16px] bg-[#EEF3F9] rounded-[6px] relative flex items-center overflow-hidden border border-slate-200/70">
                       <div
                         style={{
                           width: `${Math.min(100, Math.max(4, auc.saleRate))}%`,
                           background: barBg,
                         }}
-                        className="h-full rounded-e-md transition-all duration-300"
+                        className="h-full rounded-[5px] transition-all duration-300"
                       />
                     </div>
 
@@ -1024,7 +1106,7 @@ export const ExecutiveDashboard: React.FC<ExecutiveDashboardProps> = ({
           {/* Horizontal Axis Scale 0% .. 100% */}
           <div
             dir="ltr"
-            className="ps-[78px] pe-[58px] py-2 border-t border-slate-100 bg-[#F8FAFC] flex items-center justify-between text-[10.5px] font-extrabold font-en text-[#64748B] tabular-nums"
+            className="min-h-[48px] ps-[78px] pe-[58px] py-2 border-t border-slate-100/90 bg-[#F8FAFC] flex items-center justify-between text-[11px] font-extrabold font-en text-[#64748B] tabular-nums shrink-0"
           >
             <span>0%</span>
             <span>20%</span>

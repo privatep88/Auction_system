@@ -613,11 +613,13 @@ export const ExecutiveAuctionPrintReport: React.FC<
                 <div
                   style={{
                     background:
-                      'linear-gradient(135deg, #175A9C 0%, #123B70 100%)',
+                      'linear-gradient(135deg, #175A9C 0%, #123B70 60%, #0B2F5B 100%)',
                   }}
-                  className="px-4 py-2 text-white flex items-center gap-2"
+                  className="px-3.5 py-2 text-white flex items-center gap-2.5 shrink-0"
                 >
-                  <PieChart className="w-4 h-4 text-[#D6A348] shrink-0" />
+                  <div className="w-7 h-7 rounded-[8px] bg-white/12 border border-white/15 flex items-center justify-center shrink-0">
+                    <PieChart className="w-4 h-4 text-[#E2AD42]" />
+                  </div>
                   <h3
                     style={{ lineHeight: 1.5, letterSpacing: '0px' }}
                     className="text-[14px] font-extrabold m-0"
@@ -628,11 +630,28 @@ export const ExecutiveAuctionPrintReport: React.FC<
                   </h3>
                 </div>
 
+                {/* Panoramic Hero Image with Smooth Bottom White Fade */}
+                <div className="auction-card-hero h-[74px] shrink-0">
+                  <img
+                    src={`${assetBase}assets/card_distribution_hero.jpg`}
+                    onError={(e) => {
+                      e.currentTarget.src = `${assetBase}assets/auction_yard_showcase.jpg`;
+                    }}
+                    alt={
+                      isAr
+                        ? 'توزيع نتائج مزادات المركبات'
+                        : 'Vehicle auction results distribution'
+                    }
+                    referrerPolicy="no-referrer"
+                    className="object-[50%_54%]"
+                  />
+                </div>
+
                 <div
                   dir="ltr"
-                  className="flex items-center justify-around gap-3 px-4 py-2 my-auto"
+                  className="flex items-center justify-around gap-3 px-3.5 py-1.5 my-auto"
                 >
-                  <div className="relative w-[152px] h-[152px] shrink-0 flex items-center justify-center">
+                  <div className="relative w-[126px] h-[126px] shrink-0 flex items-center justify-center">
                     <svg viewBox="0 0 144 144" className="w-full h-full">
                       {!hasVehicles ? (
                         <circle
@@ -650,7 +669,7 @@ export const ExecutiveAuctionPrintReport: React.FC<
                             cy="72"
                             r={radius}
                             fill="transparent"
-                            stroke="#175A9C"
+                            stroke="#1259A7"
                             strokeWidth="24"
                             strokeDasharray={`${soldStroke} ${circumference}`}
                             transform="rotate(-90 72 72)"
@@ -660,7 +679,7 @@ export const ExecutiveAuctionPrintReport: React.FC<
                             cy="72"
                             r={radius}
                             fill="transparent"
-                            stroke="#C52B36"
+                            stroke="#D62828"
                             strokeWidth="24"
                             strokeDasharray={`${unsoldStroke} ${circumference}`}
                             strokeDashoffset={-soldStroke}
@@ -699,53 +718,53 @@ export const ExecutiveAuctionPrintReport: React.FC<
                       dir={isAr ? 'rtl' : 'ltr'}
                       className="absolute inset-0 flex flex-col items-center justify-center text-center"
                     >
-                      <span className="text-[20px] font-black text-[#14243D] font-en tabular-nums">
+                      <span className="text-[18px] font-black text-[#14243D] font-en tabular-nums leading-tight">
                         {metrics.totalListed.toLocaleString('en-US')}
                       </span>
                       <span
-                        style={{ lineHeight: 1.4, letterSpacing: '0px' }}
-                        className="text-[11.5px] font-extrabold text-[#64748B]"
+                        style={{ lineHeight: 1.35, letterSpacing: '0px' }}
+                        className="text-[10.5px] font-extrabold text-[#64748B]"
                       >
                         {isAr ? 'مركبة مدرجة' : 'Vehicles'}
                       </span>
                     </div>
                   </div>
 
-                  <div dir={isAr ? 'rtl' : 'ltr'} className="space-y-2.5 flex-1">
-                    <div className="p-2.5 rounded-xl bg-[#F4F7FB] border border-[#CBD5E1]">
-                      <div className="flex items-center gap-1.5 text-[12px] font-extrabold text-[#14243D]">
-                        <span className="w-3 h-3 rounded-xs bg-[#175A9C] shrink-0" />
-                        <span style={{ lineHeight: 1.45, letterSpacing: '0px' }}>
+                  <div dir={isAr ? 'rtl' : 'ltr'} className="space-y-2 flex-1">
+                    <div className="px-2.5 py-2 rounded-xl bg-[#F2F6FB] border border-[#DCE6F2]">
+                      <div className="flex items-center gap-1.5 text-[11.5px] font-extrabold text-[#14243D]">
+                        <span className="w-2.5 h-2.5 rounded-[3px] bg-[#1259A7] shrink-0" />
+                        <span style={{ lineHeight: 1.4, letterSpacing: '0px' }}>
                           {isAr ? 'المركبات المبيعة' : 'Sold Vehicles'}
                         </span>
                       </div>
-                      <div className="flex items-baseline justify-between mt-1 ps-4">
-                        <span className="text-[15.5px] font-black font-en tabular-nums text-[#14243D]">
+                      <div className="flex items-baseline justify-between mt-0.5 ps-3.5">
+                        <span className="text-[15px] font-black font-en tabular-nums text-[#14243D]">
                           {metrics.totalSold.toLocaleString('en-US')}
                         </span>
                         <span
                           dir="ltr"
-                          className="text-[12px] font-black text-[#175A9C] font-en tabular-nums"
+                          className="text-[11.5px] font-black text-[#1259A7] font-en tabular-nums"
                         >
                           ({metrics.overallSaleRate.toFixed(1)}%)
                         </span>
                       </div>
                     </div>
 
-                    <div className="p-2.5 rounded-xl bg-[#FEF3F2] border border-[#FECDCA]">
-                      <div className="flex items-center gap-1.5 text-[12px] font-extrabold text-[#14243D]">
-                        <span className="w-3 h-3 rounded-xs bg-[#C52B36] shrink-0" />
-                        <span style={{ lineHeight: 1.45, letterSpacing: '0px' }}>
+                    <div className="px-2.5 py-2 rounded-xl bg-[#FEF4F4] border border-[#FADBD8]">
+                      <div className="flex items-center gap-1.5 text-[11.5px] font-extrabold text-[#14243D]">
+                        <span className="w-2.5 h-2.5 rounded-[3px] bg-[#D62828] shrink-0" />
+                        <span style={{ lineHeight: 1.4, letterSpacing: '0px' }}>
                           {isAr ? 'المركبات غير المبيعة' : 'Unsold Vehicles'}
                         </span>
                       </div>
-                      <div className="flex items-baseline justify-between mt-1 ps-4">
-                        <span className="text-[15.5px] font-black font-en tabular-nums text-[#C52B36]">
+                      <div className="flex items-baseline justify-between mt-0.5 ps-3.5">
+                        <span className="text-[15px] font-black font-en tabular-nums text-[#D62828]">
                           {metrics.totalUnsold.toLocaleString('en-US')}
                         </span>
                         <span
                           dir="ltr"
-                          className="text-[12px] font-black text-[#C52B36] font-en tabular-nums"
+                          className="text-[11.5px] font-black text-[#D62828] font-en tabular-nums"
                         >
                           ({metrics.overallUnsoldRate.toFixed(1)}%)
                         </span>
@@ -754,19 +773,19 @@ export const ExecutiveAuctionPrintReport: React.FC<
                   </div>
                 </div>
 
-                <div className="px-4 py-2 bg-[#F8FAFC] border-t border-[#E2E8F0]">
-                  <div className="flex items-center justify-between text-[12px] font-extrabold mb-1">
+                <div className="px-4 py-2 bg-[#F8FAFC] border-t border-[#E2E8F0] shrink-0">
+                  <div className="flex items-center justify-between text-[11.5px] font-extrabold mb-1">
                     <span
                       style={{ lineHeight: 1.45, letterSpacing: '0px' }}
-                      className="text-[#64748B]"
+                      className="text-[#475569]"
                     >
                       {isAr
-                        ? 'مؤشر كفاءة البيع الشهرية'
-                        : 'Monthly Sale Efficiency'}
+                        ? 'مؤشر نسبة البيع الإجمالية'
+                        : 'Overall Sale Rate Index'}
                     </span>
                     <span
                       dir="ltr"
-                      className="text-[#16843B] font-black font-en tabular-nums"
+                      className="text-[#1A8F3E] font-black font-en tabular-nums"
                     >
                       {metrics.overallSaleRate.toFixed(1)}%
                     </span>
@@ -779,7 +798,7 @@ export const ExecutiveAuctionPrintReport: React.FC<
                       style={{
                         width: `${Math.min(100, metrics.overallSaleRate)}%`,
                         background:
-                          'linear-gradient(90deg, #175A9C 0%, #16843B 100%)',
+                          'linear-gradient(90deg, #1259A7 0%, #1A8F3E 100%)',
                       }}
                       className="h-full"
                     />
@@ -787,7 +806,7 @@ export const ExecutiveAuctionPrintReport: React.FC<
                       style={{
                         width: `${Math.min(100, metrics.overallUnsoldRate)}%`,
                       }}
-                      className="h-full bg-[#C52B36]"
+                      className="h-full bg-[#D62828]"
                     />
                   </div>
                 </div>
@@ -910,12 +929,14 @@ export const ExecutiveAuctionPrintReport: React.FC<
                 <div
                   style={{
                     background:
-                      'linear-gradient(135deg, #175A9C 0%, #123B70 100%)',
+                      'linear-gradient(135deg, #175A9C 0%, #123B70 60%, #0B2F5B 100%)',
                   }}
-                  className="px-4 py-2.5 text-white flex items-center justify-between"
+                  className="px-4 py-2 text-white flex items-center justify-between shrink-0"
                 >
-                  <div className="flex items-center gap-2">
-                    <BarChart3 className="w-4 h-4 text-[#D6A348] shrink-0" />
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-7 h-7 rounded-[8px] bg-white/12 border border-white/15 flex items-center justify-center shrink-0">
+                      <BarChart3 className="w-4 h-4 text-[#E2AD42]" />
+                    </div>
                     <h3
                       style={{ lineHeight: 1.5, letterSpacing: '0px' }}
                       className="text-[14.5px] font-extrabold m-0"
@@ -933,9 +954,26 @@ export const ExecutiveAuctionPrintReport: React.FC<
                   </span>
                 </div>
 
+                {/* Panoramic Hero Image with Smooth Bottom White Fade */}
+                <div className="auction-card-hero h-[112px] shrink-0">
+                  <img
+                    src={`${assetBase}assets/card_comparison_hero.jpg`}
+                    onError={(e) => {
+                      e.currentTarget.src = `${assetBase}assets/auction_yard_showcase.jpg`;
+                    }}
+                    alt={
+                      isAr
+                        ? 'مقارنة أداء المزادات'
+                        : 'Auction performance comparison'
+                    }
+                    referrerPolicy="no-referrer"
+                    className="object-center"
+                  />
+                </div>
+
                 <div
                   dir="ltr"
-                  className="relative flex-1 flex flex-col justify-center px-5 py-4"
+                  className="relative flex-1 flex flex-col justify-center px-5 py-2"
                 >
                   {auctions.length === 0 ? (
                     <div
@@ -949,12 +987,12 @@ export const ExecutiveAuctionPrintReport: React.FC<
                     </div>
                   ) : (
                     <svg
-                      viewBox="0 0 620 310"
-                      className="w-full h-full max-h-[410px] overflow-visible"
+                      viewBox="0 0 620 296"
+                      className="w-full h-full max-h-[305px] overflow-visible"
                     >
                       {/* Grid Lines */}
                       {standardTicks.map((tick) => {
-                        const y = 260 - (tick / yAxisMax) * 220;
+                        const y = 248 - (tick / yAxisMax) * 212;
                         return (
                           <g key={tick}>
                             <line
@@ -991,26 +1029,26 @@ export const ExecutiveAuctionPrintReport: React.FC<
                           Math.max(10, slotWidth * 0.22)
                         );
 
-                        const listedH = (auc.listedVehicles / yAxisMax) * 220;
-                        const soldH = (auc.soldVehicles / yAxisMax) * 220;
-                        const unsoldH = (auc.unsoldVehicles / yAxisMax) * 220;
+                        const listedH = (auc.listedVehicles / yAxisMax) * 212;
+                        const soldH = (auc.soldVehicles / yAxisMax) * 212;
+                        const unsoldH = (auc.unsoldVehicles / yAxisMax) * 212;
 
                         return (
                           <g key={auc.id}>
                             {/* Listed Bar */}
                             <rect
                               x={groupCenter - barWidth * 1.5 - 2}
-                              y={260 - listedH}
+                              y={248 - listedH}
                               width={barWidth}
                               height={Math.max(2, listedH)}
-                              fill="#123B70"
+                              fill="#1259A7"
                               rx="3"
                             />
                             <text
                               x={groupCenter - barWidth - 2}
-                              y={260 - listedH - 5}
+                              y={248 - listedH - 5}
                               textAnchor="middle"
-                              fill="#123B70"
+                              fill="#1259A7"
                               fontSize="9.5"
                               fontWeight="800"
                               className="font-en tabular-nums"
@@ -1021,17 +1059,17 @@ export const ExecutiveAuctionPrintReport: React.FC<
                             {/* Sold Bar */}
                             <rect
                               x={groupCenter - barWidth * 0.5}
-                              y={260 - soldH}
+                              y={248 - soldH}
                               width={barWidth}
                               height={Math.max(2, soldH)}
-                              fill="#16843B"
+                              fill="#1A8F3E"
                               rx="3"
                             />
                             <text
                               x={groupCenter}
-                              y={260 - soldH - 5}
+                              y={248 - soldH - 5}
                               textAnchor="middle"
-                              fill="#16843B"
+                              fill="#1A8F3E"
                               fontSize="9.5"
                               fontWeight="800"
                               className="font-en tabular-nums"
@@ -1042,17 +1080,17 @@ export const ExecutiveAuctionPrintReport: React.FC<
                             {/* Unsold Bar */}
                             <rect
                               x={groupCenter + barWidth * 0.5 + 2}
-                              y={260 - unsoldH}
+                              y={248 - unsoldH}
                               width={barWidth}
                               height={Math.max(2, unsoldH)}
-                              fill="#C52B36"
+                              fill="#D62828"
                               rx="3"
                             />
                             <text
                               x={groupCenter + barWidth + 2}
-                              y={260 - unsoldH - 5}
+                              y={248 - unsoldH - 5}
                               textAnchor="middle"
-                              fill="#C52B36"
+                              fill="#D62828"
                               fontSize="9.5"
                               fontWeight="800"
                               className="font-en tabular-nums"
@@ -1063,7 +1101,7 @@ export const ExecutiveAuctionPrintReport: React.FC<
                             {/* Auction Code on X-Axis */}
                             <text
                               x={groupCenter}
-                              y="282"
+                              y="270"
                               textAnchor="middle"
                               fill="#14243D"
                               fontSize="11"
@@ -1078,9 +1116,9 @@ export const ExecutiveAuctionPrintReport: React.FC<
 
                       <line
                         x1="48"
-                        y1="260"
+                        y1="248"
                         x2="600"
-                        y2="260"
+                        y2="248"
                         stroke="#64748B"
                         strokeWidth="1.5"
                       />
@@ -1092,32 +1130,32 @@ export const ExecutiveAuctionPrintReport: React.FC<
                 <div
                   dir={isAr ? 'rtl' : 'ltr'}
                   style={{ lineHeight: 1.5, letterSpacing: '0px' }}
-                  className="px-4 py-3 bg-[#F8FAFC] border-t border-[#E2E8F0] flex items-center justify-center gap-6 text-[12.5px] font-extrabold text-[#14243D]"
+                  className="px-4 py-2.5 bg-[#F8FAFC] border-t border-[#E2E8F0] flex items-center justify-center gap-6 text-[12.5px] font-extrabold text-[#14243D] shrink-0"
                 >
                   <div className="flex items-center gap-2">
-                    <span className="w-3.5 h-3.5 rounded-xs bg-[#123B70] shrink-0" />
+                    <span className="w-3.5 h-3.5 rounded-[3px] bg-[#1259A7] shrink-0" />
                     <span>
                       {isAr ? 'المركبات المدرجة:' : 'Listed Vehicles:'}
                     </span>
-                    <span className="font-en font-black text-[#123B70] tabular-nums">
+                    <span className="font-en font-black text-[#1259A7] tabular-nums">
                       {metrics.totalListed.toLocaleString('en-US')}
                     </span>
                   </div>
                   <div className="flex items-center gap-2">
-                    <span className="w-3.5 h-3.5 rounded-xs bg-[#16843B] shrink-0" />
+                    <span className="w-3.5 h-3.5 rounded-[3px] bg-[#1A8F3E] shrink-0" />
                     <span>
                       {isAr ? 'المركبات المبيعة:' : 'Sold Vehicles:'}
                     </span>
-                    <span className="font-en font-black text-[#16843B] tabular-nums">
+                    <span className="font-en font-black text-[#1A8F3E] tabular-nums">
                       {metrics.totalSold.toLocaleString('en-US')}
                     </span>
                   </div>
                   <div className="flex items-center gap-2">
-                    <span className="w-3.5 h-3.5 rounded-xs bg-[#C52B36] shrink-0" />
+                    <span className="w-3.5 h-3.5 rounded-[3px] bg-[#D62828] shrink-0" />
                     <span>
                       {isAr ? 'المركبات غير المبيعة:' : 'Unsold Vehicles:'}
                     </span>
-                    <span className="font-en font-black text-[#C52B36] tabular-nums">
+                    <span className="font-en font-black text-[#D62828] tabular-nums">
                       {metrics.totalUnsold.toLocaleString('en-US')}
                     </span>
                   </div>
@@ -1129,12 +1167,14 @@ export const ExecutiveAuctionPrintReport: React.FC<
                 <div
                   style={{
                     background:
-                      'linear-gradient(135deg, #175A9C 0%, #123B70 100%)',
+                      'linear-gradient(135deg, #175A9C 0%, #123B70 60%, #0B2F5B 100%)',
                   }}
-                  className="px-4 py-2.5 text-white flex items-center justify-between"
+                  className="px-4 py-2 text-white flex items-center justify-between shrink-0"
                 >
-                  <div className="flex items-center gap-2">
-                    <TrendingUp className="w-4 h-4 text-[#D6A348] shrink-0" />
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-7 h-7 rounded-[8px] bg-white/12 border border-white/15 flex items-center justify-center shrink-0">
+                      <TrendingUp className="w-4 h-4 text-[#E2AD42]" />
+                    </div>
                     <h3
                       style={{ lineHeight: 1.5, letterSpacing: '0px' }}
                       className="text-[14.5px] font-extrabold m-0"
@@ -1146,9 +1186,26 @@ export const ExecutiveAuctionPrintReport: React.FC<
                   </div>
                 </div>
 
+                {/* Panoramic Hero Image with Smooth Bottom White Fade */}
+                <div className="auction-card-hero h-[112px] shrink-0">
+                  <img
+                    src={`${assetBase}assets/card_success_rate_hero.jpg`}
+                    onError={(e) => {
+                      e.currentTarget.src = `${assetBase}assets/auction_yard_showcase.jpg`;
+                    }}
+                    alt={
+                      isAr
+                        ? 'نسبة نجاح البيع حسب المزاد'
+                        : 'Sale success rate by auction'
+                    }
+                    referrerPolicy="no-referrer"
+                    className="object-[50%_62%]"
+                  />
+                </div>
+
                 <div
                   dir="ltr"
-                  className="flex-1 flex flex-col justify-center space-y-3.5 px-5 py-4"
+                  className="flex-1 flex flex-col justify-center space-y-2.5 px-5 py-2"
                 >
                   {sortedBySaleRate.length === 0 ? (
                     <div
@@ -1164,10 +1221,10 @@ export const ExecutiveAuctionPrintReport: React.FC<
                     sortedBySaleRate.slice(0, 10).map((auc, idx) => {
                       const barGradients = [
                         'linear-gradient(90deg, #16843B 0%, #22A04B 100%)',
-                        'linear-gradient(90deg, #198D3F 0%, #29A852 100%)',
-                        'linear-gradient(90deg, #1E9645 0%, #34B25D 100%)',
-                        'linear-gradient(90deg, #2D9F4E 0%, #48BC69 100%)',
-                        'linear-gradient(90deg, #3DA858 0%, #5CC476 100%)',
+                        'linear-gradient(90deg, #1A8F3E 0%, #2BA853 100%)',
+                        'linear-gradient(90deg, #259B4A 0%, #3BB862 100%)',
+                        'linear-gradient(90deg, #35AA59 0%, #52C474 100%)',
+                        'linear-gradient(90deg, #4BB868 0%, #68CE82 100%)',
                       ];
                       const barBg =
                         barGradients[Math.min(idx, barGradients.length - 1)];
@@ -1175,27 +1232,27 @@ export const ExecutiveAuctionPrintReport: React.FC<
                       return (
                         <div
                           key={auc.id}
-                          className="flex items-center gap-3 text-[12.5px] font-extrabold"
+                          className="flex items-center gap-3 text-[12px] font-extrabold"
                         >
-                          <span className="auction-id w-[74px] justify-end font-en font-black text-[#123B70] text-[13px] shrink-0">
+                          <span className="auction-id w-[72px] justify-end font-en font-black text-[#123B70] text-[12.5px] shrink-0">
                             {auc.auctionNumber}
                           </span>
 
-                          <div className="flex-1 h-[22px] bg-[#F1F5F9] rounded-md relative flex items-center overflow-hidden border border-[#E2E8F0]">
+                          <div className="flex-1 h-[18px] bg-[#EEF3F9] rounded-[6px] relative flex items-center overflow-hidden border border-[#E2E8F0]">
                             <div
                               style={{
                                 width: `${Math.min(100, Math.max(4, auc.saleRate))}%`,
                                 background: barBg,
                               }}
-                              className="h-full rounded-e-md"
+                              className="h-full rounded-[5px]"
                             />
                           </div>
 
-                          <div className="w-[105px] flex items-center justify-between shrink-0 font-en tabular-nums">
-                            <span className="text-[13px] font-black text-[#16843B]">
+                          <div className="w-[102px] flex items-center justify-between shrink-0 font-en tabular-nums">
+                            <span className="text-[12.5px] font-black text-[#1A8F3E]">
                               {auc.saleRate.toFixed(1)}%
                             </span>
-                            <span className="text-[11px] font-bold text-[#64748B]">
+                            <span className="text-[10.5px] font-bold text-[#64748B]">
                               ({auc.soldVehicles}/{auc.listedVehicles})
                             </span>
                           </div>
@@ -1208,7 +1265,7 @@ export const ExecutiveAuctionPrintReport: React.FC<
                 {/* Scale 0% .. 100% */}
                 <div
                   dir="ltr"
-                  className="ps-[94px] pe-[125px] py-3 bg-[#F8FAFC] border-t border-[#E2E8F0] flex items-center justify-between text-[11px] font-extrabold font-en text-[#64748B] tabular-nums"
+                  className="ps-[92px] pe-[122px] py-2.5 bg-[#F8FAFC] border-t border-[#E2E8F0] flex items-center justify-between text-[11px] font-extrabold font-en text-[#64748B] tabular-nums shrink-0"
                 >
                   <span>0%</span>
                   <span>20%</span>
